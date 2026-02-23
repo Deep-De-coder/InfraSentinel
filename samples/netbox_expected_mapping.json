@@ -1,0 +1,12 @@
+{
+  "default": {
+    "panel_id": "PANEL-A",
+    "port_label": "A-24",
+    "cable_tag": "CAB-9001"
+  },
+  "CHG-1001": {
+    "panel_id": "PANEL-A",
+    "port_label": "A-24",
+    "cable_tag": "CAB-9001"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "InfraSentinel Agents",
+  "version": "0.1.0",
+  "description": "A2A placeholder card for InfraSentinel typed decision agents.",
+  "agents": [
+    {
+      "id": "mop-compliance-agent",
+      "name": "MOPComplianceAgent",
+      "capabilities": [
+        "Determine required evidence per MOP step",
+        "Enforce evidence gating decisions"
+      ]
+    },
+    {
+      "id": "vision-verifier-agent",
+      "name": "VisionVerifierAgent",
+      "capabilities": [
+        "Interpret OCR/cable outputs",
+        "Request retake on low-confidence evidence"
+      ]
+    },
+    {
+      "id": "cmdb-validator-agent",
+      "name": "CMDBValidatorAgent",
+      "capabilities": [
+        "Interpret NetBox validation",
+        "Decide block/escalate vs proceed"
+      ]
+    }
+  ]
+}

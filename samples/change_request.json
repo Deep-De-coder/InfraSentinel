@@ -1,0 +1,38 @@
+{
+  "default": {
+    "title": "Replace patch cable on TOR panel",
+    "summary": "MOP for replacing cable and validating final mapping.",
+    "steps": [
+      {
+        "step_id": "step-1",
+        "description": "Verify panel port and cable tag before moving cable",
+        "step_type": "verify_port_and_cable",
+        "requires_evidence": true
+      },
+      {
+        "step_id": "step-2",
+        "description": "Complete physical cable move",
+        "step_type": "task",
+        "requires_evidence": false
+      }
+    ]
+  },
+  "CHG-1001": {
+    "title": "Replace patch cable on TOR panel",
+    "summary": "MOP for replacing cable and validating final mapping.",
+    "steps": [
+      {
+        "step_id": "step-1",
+        "description": "Verify panel port and cable tag before moving cable",
+        "step_type": "verify_port_and_cable",
+        "requires_evidence": true
+      },
+      {
+        "step_id": "step-2",
+        "description": "Complete physical cable move",
+        "step_type": "task",
+        "requires_evidence": false
+      }
+    ]
+  }
+}

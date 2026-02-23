@@ -1,0 +1,30 @@
+{
+  "default": {
+    "panel_id": "PANEL-A",
+    "port_label": "A-24",
+    "cable_tag": "CAB-9001",
+    "port_confidence": 0.95,
+    "cable_confidence": 0.96
+  },
+  "evidence-good": {
+    "panel_id": "PANEL-A",
+    "port_label": "A-24",
+    "cable_tag": "CAB-9001",
+    "port_confidence": 0.97,
+    "cable_confidence": 0.97
+  },
+  "evidence-bad-port": {
+    "panel_id": "PANEL-A",
+    "port_label": "A-99",
+    "cable_tag": "CAB-9001",
+    "port_confidence": 0.98,
+    "cable_confidence": 0.98
+  },
+  "evidence-low-confidence": {
+    "panel_id": "PANEL-A",
+    "port_label": "A-24",
+    "cable_tag": "CAB-9001",
+    "port_confidence": 0.52,
+    "cable_confidence": 0.57
+  }
+}
