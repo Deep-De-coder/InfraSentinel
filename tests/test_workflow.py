@@ -1,6 +1,8 @@
 from datetime import timedelta
 
 import pytest
+
+pytest.importorskip("temporalio")
 from temporalio.client import Client
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker

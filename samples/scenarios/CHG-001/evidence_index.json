@@ -1,0 +1,8 @@
+{
+  "entries": [
+    {"evidence_id": "EVID-001", "path": "../../images/evidence-good.png", "uri": "file://samples/images/evidence-good.png"},
+    {"evidence_id": "EVID-002", "path": "../../images/evidence-good.png", "uri": "file://samples/images/evidence-good.png"},
+    {"evidence_id": "EVID-003", "path": "../../images/evidence-good.png", "uri": "file://samples/images/evidence-good.png"},
+    {"evidence_id": "EVID-002-RETAKE", "path": "../../images/evidence-good.png", "uri": "file://samples/images/evidence-good.png"}
+  ]
+}

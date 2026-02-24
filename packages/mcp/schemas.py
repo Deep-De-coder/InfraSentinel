@@ -1,12 +1,8 @@
 from pydantic import BaseModel, Field
 
 from packages.cv.schema import CableTagResult, PortLabelResult
-from packages.core.models import (
-    ChangeRequest,
-    EvidenceRef,
-    ExpectedMapping,
-    StepStatus,
-)
+from packages.core.models.change import ChangeRequest
+from packages.core.models.legacy import EvidenceRef, ExpectedMapping, StepStatusLegacy as StepStatus
 
 
 class CameraCaptureFrameInput(BaseModel):

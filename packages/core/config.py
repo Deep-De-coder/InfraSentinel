@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     netbox_url: str = Field(default="http://localhost:8001", alias="NETBOX_URL")
     netbox_token: str = Field(default="", alias="NETBOX_TOKEN")
     cv_mode: str = Field(default="mock", alias="CV_MODE")
+    scenario: str = Field(default="CHG-001_A", alias="SCENARIO")
 
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     langfuse_public_key: str | None = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")

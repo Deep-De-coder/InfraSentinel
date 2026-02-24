@@ -4,12 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
 
 from packages.cv.schema import CableTagResult, PortLabelResult
-from packages.core.models import (
-    ChangeRequest,
-    EvidenceRef,
-    ExpectedMapping,
-    ValidationResult,
-)
+from packages.core.models.change import ChangeRequest
+from packages.core.models.legacy import EvidenceRef, ExpectedMapping, ValidationResult
 
 
 ToolFn = Callable[..., Awaitable[Any]]
@@ -31,6 +27,7 @@ class MCPToolRouter:
     netbox_validate_observed: ToolFn
     ticketing_get_change: ToolFn
     ticketing_post_step_result: ToolFn
+    ticketing_request_approval: ToolFn
 
     async def capture_frame(self, source: str) -> EvidenceRef:
         return await self.camera_capture_frame(source=source)
@@ -40,13 +37,21 @@ class MCPToolRouter:
     ) -> EvidenceRef:
         return await self.camera_store_evidence(path=path, data_b64=data_b64, metadata=metadata or {})
 
-    async def read_port_label(self, evidence_id: str) -> PortLabelResult:
-        return await self.cv_read_port_label(evidence_id=evidence_id)
+    async def read_port_label(
+        self, evidence_id: str, change_id: str = "", scenario: str | None = None
+    ) -> PortLabelResult:
+        return await self.cv_read_port_label(
+            evidence_id=evidence_id, change_id=change_id, scenario=scenario
+        )
 
-    async def read_cable_tag(self, evidence_id: str) -> CableTagResult:
-        return await self.cv_read_cable_tag(evidence_id=evidence_id)
+    async def read_cable_tag(
+        self, evidence_id: str, change_id: str = "", scenario: str | None = None
+    ) -> CableTagResult:
+        return await self.cv_read_cable_tag(
+            evidence_id=evidence_id, change_id=change_id, scenario=scenario
+        )
 
-    async def get_expected_mapping(self, change_id: str) -> ExpectedMapping:
+    async def get_expected_mapping(self, change_id: str) -> dict:
         return await self.netbox_get_expected_mapping(change_id=change_id)
 
     async def validate_observed(
@@ -76,4 +81,18 @@ class MCPToolRouter:
             status=status,
             evidence_refs=evidence_refs,
             notes=notes,
+        )
+
+    async def request_approval(
+        self,
+        change_id: str,
+        step_id: str,
+        reason: str,
+        evidence_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return await self.ticketing_request_approval(
+            change_id=change_id,
+            step_id=step_id,
+            reason=reason,
+            evidence_ids=evidence_ids,
         )

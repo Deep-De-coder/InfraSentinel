@@ -1,36 +1,47 @@
+"""NetBox MCP handlers with allowed_endpoints support."""
+
 from __future__ import annotations
 
-from packages.core.models import ExpectedMapping, ValidationResult
-from services.common import load_sample_json
+from packages.core.fixtures.loaders import load_expected_mapping
+from packages.core.models.legacy import ValidationResult
 
 
 class NetboxHandlers:
-    async def get_expected_mapping(self, change_id: str) -> ExpectedMapping:
-        data = load_sample_json("netbox_expected_mapping.json")
-        mapping = data.get(change_id, data["default"])
-        return ExpectedMapping(
-            change_id=change_id,
-            panel_id=mapping["panel_id"],
-            port_label=mapping["port_label"],
-            cable_tag=mapping["cable_tag"],
-        )
+    async def get_expected_mapping(self, change_id: str) -> dict:
+        data = load_expected_mapping(change_id)
+        return data
 
     async def validate_observed(
         self, change_id: str, panel_id: str, port_label: str, cable_tag: str
     ) -> ValidationResult:
-        expected = await self.get_expected_mapping(change_id=change_id)
-        match = (
-            expected.panel_id == panel_id
-            and expected.port_label == port_label
-            and expected.cable_tag == cable_tag
-        )
-        if match:
-            return ValidationResult(match=True, reason="Observed mapping matches NetBox.", confidence=0.99)
+        data = load_expected_mapping(change_id)
+        allowed = data.get("allowed_endpoints", [])
+        if not allowed:
+            # Fallback: single expected mapping
+            exp = data.get("default", data)
+            if isinstance(exp, dict) and "panel_id" in exp:
+                match = (
+                    exp.get("panel_id") == panel_id
+                    and exp.get("port_label") == port_label
+                    and exp.get("cable_tag") == cable_tag
+                )
+                if match:
+                    return ValidationResult(match=True, reason="Observed matches expected.", confidence=0.99)
+                return ValidationResult(
+                    match=False,
+                    reason=f"Expected ({exp.get('panel_id')}, {exp.get('port_label')}, {exp.get('cable_tag')}) "
+                    f"but got ({panel_id}, {port_label}, {cable_tag})",
+                    confidence=0.99,
+                )
+
+        for ep in allowed:
+            ep_panel = ep.get("panel_id")
+            ep_port = ep.get("port_label") or ep.get("port_label_alt")
+            ep_tag = ep.get("cable_tag")
+            if ep_panel == panel_id and ep_port == port_label and ep_tag == cable_tag:
+                return ValidationResult(match=True, reason="Observed matches allowed endpoint.", confidence=0.99)
         return ValidationResult(
             match=False,
-            reason=(
-                f"Expected ({expected.panel_id}, {expected.port_label}, {expected.cable_tag}) "
-                f"but got ({panel_id}, {port_label}, {cable_tag})"
-            ),
+            reason=f"No allowed endpoint matches ({panel_id}, {port_label}, {cable_tag})",
             confidence=0.99,
         )

@@ -34,6 +34,21 @@ def build_server():
             notes=notes,
         )
 
+    @server.tool(name="ticketing.request_approval")
+    async def request_approval(
+        change_id: str,
+        step_id: str,
+        reason: str,
+        evidence_ids: list[str] | None = None,
+    ):
+        logger.info("ticketing.request_approval called")
+        return await handlers.request_approval(
+            change_id=change_id,
+            step_id=step_id,
+            reason=reason,
+            evidence_ids=evidence_ids,
+        )
+
     return server
 
 

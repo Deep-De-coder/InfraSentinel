@@ -10,7 +10,12 @@ from pydantic import BaseModel
 from packages.agents.cmdb_validator import CMDBValidatorAgent
 from packages.agents.mop_compliance import MOPComplianceAgent
 from packages.agents.vision_verifier import VisionVerifierAgent
-from packages.core.models import CVCableTagResult, CVPortLabelResult, ChangeStep, ValidationResult
+from packages.core.models.legacy import (
+    CVCableTagResult,
+    CVPortLabelResult,
+    ChangeStep,
+    ValidationResult,
+)
 
 app = FastAPI(title="InfraSentinel A2A Placeholder")
 

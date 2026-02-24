@@ -10,14 +10,14 @@ from packages.agents.mop_compliance import MOPComplianceAgent
 from packages.agents.vision_verifier import VisionVerifierAgent
 from packages.core.audit import make_audit_event
 from packages.core.db import persist_audit_event, persist_step_result
-from packages.core.models import (
+from packages.core.models.legacy import (
     CVCableTagResult,
     CVPortLabelResult,
     ChangeStep,
     EvidenceRef,
-    StepResult,
-    StepStatus,
-    StepType,
+    StepResultLegacy,
+    StepStatusLegacy,
+    StepTypeLegacy,
 )
 from packages.mcp.client import MCPToolRouter
 from services.mcp_camera.handlers import CameraHandlers
@@ -42,6 +42,7 @@ class WorkerDependencies:
             netbox_validate_observed=netbox.validate_observed,
             ticketing_get_change=ticketing.get_change,
             ticketing_post_step_result=ticketing.post_step_result,
+            ticketing_request_approval=ticketing.request_approval,
         )
         self.mop_agent = MOPComplianceAgent()
         self.vision_agent = VisionVerifierAgent()
@@ -68,14 +69,14 @@ async def fetch_change(change_id: str) -> dict:
 async def process_step(change_id: str, step: dict, evidence_id: str | None = None) -> dict:
     if deps is None:
         raise RuntimeError("Worker dependencies not configured.")
-    step_type = StepType(step["step_type"])
+    step_type = StepTypeLegacy(step["step_type"])
     step_id = step["step_id"]
 
-    if step_type != StepType.VERIFY_PORT_AND_CABLE:
-        result = StepResult(
+    if step_type != StepTypeLegacy.VERIFY_PORT_AND_CABLE:
+        result = StepResultLegacy(
             change_id=change_id,
             step_id=step_id,
-            status=StepStatus.COMPLETED,
+            status=StepStatusLegacy.COMPLETED,
             notes="Non-verification step auto-completed in scaffold.",
         )
         async with deps.session_factory() as session:
@@ -111,10 +112,10 @@ async def process_step(change_id: str, step: dict, evidence_id: str | None = Non
     )
     vision = await deps.vision_agent.run(port=port_core, cable=cable_core)
     if not vision.accept:
-        result = StepResult(
+        result = StepResultLegacy(
             change_id=change_id,
             step_id=step_id,
-            status=StepStatus.BLOCKED,
+            status=StepStatusLegacy.BLOCKED,
             notes=f"{vision.guidance} (confidence={vision.confidence:.2f})",
             evidence_refs=[evidence],
         )
@@ -126,7 +127,7 @@ async def process_step(change_id: str, step: dict, evidence_id: str | None = Non
             cable_tag=cable_core.cable_tag,
         )
         cmdb = await deps.cmdb_agent.run(validation=validation)
-        result = StepResult(
+        result = StepResultLegacy(
             change_id=change_id,
             step_id=step_id,
             status=cmdb.status,
@@ -159,7 +160,7 @@ async def process_step(change_id: str, step: dict, evidence_id: str | None = Non
 @activity.defn
 async def finalize_change(change_id: str, step_results: list[dict]) -> dict:
     status = "VERIFIED"
-    if any(item["status"] == StepStatus.BLOCKED.value for item in step_results):
+    if any(item["status"] == StepStatusLegacy.BLOCKED.value for item in step_results):
         status = "BLOCKED"
     return {
         "change_id": change_id,

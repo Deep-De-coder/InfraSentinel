@@ -1,0 +1,6 @@
+{
+  "allowed_endpoints": [
+    {"panel_id": "PANEL-A", "port_label": "24", "cable_tag": "MDF-01-R12-P24"},
+    {"panel_id": "PANEL-A", "port_label": "A-24", "port_label_alt": "24", "cable_tag": "MDF-01-R12-P24"}
+  ]
+}

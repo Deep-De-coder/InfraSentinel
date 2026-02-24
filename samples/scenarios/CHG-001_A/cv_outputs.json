@@ -1,0 +1,6 @@
+{
+  "EVID-001": {"panel_id": "PANEL-A", "port_label": "24", "cable_tag": "MDF-01-R12-P24", "port_confidence": 0.95, "cable_confidence": 0.96},
+  "EVID-002": {"panel_id": "PANEL-A", "port_label": "24", "cable_tag": "MDF-01-R12-P24", "port_confidence": 0.97, "cable_confidence": 0.97},
+  "EVID-003": {"panel_id": "PANEL-A", "port_label": "24", "cable_tag": "MDF-01-R12-P24", "port_confidence": 0.96, "cable_confidence": 0.97},
+  "default": {"panel_id": "PANEL-A", "port_label": "24", "cable_tag": "MDF-01-R12-P24", "port_confidence": 0.95, "cable_confidence": 0.95}
+}

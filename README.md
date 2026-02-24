@@ -43,21 +43,46 @@ make dev
 make mcp
 ```
 
-5. Start a sample workflow:
+5. Start a change with scenario (CHG-001):
 
 ```bash
 curl -X POST http://localhost:8080/v1/changes/start \
   -H "Content-Type: application/json" \
-  -d "{\"change_id\":\"CHG-1001\"}"
+  -d '{"change_id":"CHG-001","scenario":"CHG-001_A"}'
 ```
 
-6. Upload evidence:
+6. Upload evidence for each step (use fixture evidence_id or file):
 
 ```bash
+# Scenario A: use fixture evidence IDs
 curl -X POST http://localhost:8080/v1/evidence/upload \
-  -F "change_id=CHG-1001" \
-  -F "step_id=step-1" \
-  -F "file=@samples/images/.gitkeep"
+  -F "change_id=CHG-001" \
+  -F "step_id=S1" \
+  -F "evidence_id=EVID-001"
+
+curl -X POST http://localhost:8080/v1/evidence/upload \
+  -F "change_id=CHG-001" \
+  -F "step_id=S2" \
+  -F "evidence_id=EVID-002"
+
+curl -X POST http://localhost:8080/v1/evidence/upload \
+  -F "change_id=CHG-001" \
+  -F "step_id=S3" \
+  -F "evidence_id=EVID-003"
+```
+
+7. Fetch proof pack:
+
+```bash
+curl http://localhost:8080/v1/changes/CHG-001/proofpack
+```
+
+8. If a step is BLOCKED (e.g. scenario B), approve override:
+
+```bash
+curl -X POST http://localhost:8080/v1/changes/CHG-001/approve \
+  -H "Content-Type: application/json" \
+  -d '{"step_id":"S2","approver":"admin"}'
 ```
 
 ## Fastest Path To Working CV
@@ -114,6 +139,12 @@ Optional OCR backend:
 - Install Python package: `uv add pytesseract`
 - Install system binary: `tesseract` (must be on PATH)
 - Set `CV_MODE=tesseract`
+
+## Scenario Fixtures
+
+- **CHG-001_A**: Happy path, all evidence IDs match expected mapping.
+- **CHG-001_B**: S2 has wrong port (99 vs 24) => BLOCKED, requires approval.
+- **CHG-001_C**: S2 first upload has low confidence => NEEDS_RETAKE; upload EVID-002-RETAKE to proceed.
 
 ## Development Notes
 

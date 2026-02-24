@@ -8,7 +8,7 @@ from sqlalchemy import DateTime, String, Text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from packages.core.models import AuditEvent, StepResult
+from packages.core.models.legacy import AuditEvent, StepResultLegacy
 
 
 class Base(DeclarativeBase):
@@ -51,7 +51,7 @@ async def init_db(engine: AsyncEngine) -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def persist_step_result(session: AsyncSession, result: StepResult) -> None:
+async def persist_step_result(session: AsyncSession, result: StepResultLegacy) -> None:
     row = StepResultRow(
         change_id=result.change_id,
         step_id=result.step_id,

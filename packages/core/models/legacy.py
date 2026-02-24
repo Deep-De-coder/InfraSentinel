@@ -1,3 +1,5 @@
+"""Legacy models for backward compatibility."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -11,12 +13,12 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class StepType(str, Enum):
+class StepTypeLegacy(str, Enum):
     VERIFY_PORT_AND_CABLE = "verify_port_and_cable"
     TASK = "task"
 
 
-class StepStatus(str, Enum):
+class StepStatusLegacy(str, Enum):
     PENDING = "PENDING"
     VERIFIED = "VERIFIED"
     BLOCKED = "BLOCKED"
@@ -33,15 +35,8 @@ class EvidenceRef(BaseModel):
 class ChangeStep(BaseModel):
     step_id: str
     description: str
-    step_type: StepType = StepType.TASK
+    step_type: StepTypeLegacy = StepTypeLegacy.TASK
     requires_evidence: bool = False
-
-
-class ChangeRequest(BaseModel):
-    change_id: str
-    title: str
-    summary: str | None = None
-    steps: list[ChangeStep]
 
 
 class ExpectedMapping(BaseModel):
@@ -68,10 +63,10 @@ class ValidationResult(BaseModel):
     confidence: float
 
 
-class StepResult(BaseModel):
+class StepResultLegacy(BaseModel):
     change_id: str
     step_id: str
-    status: StepStatus
+    status: StepStatusLegacy
     notes: str | None = None
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
