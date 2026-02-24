@@ -1,30 +1,26 @@
 {
   "default": {
-    "panel_id": "PANEL-A",
-    "port_label": "A-24",
-    "cable_tag": "CAB-9001",
-    "port_confidence": 0.95,
-    "cable_confidence": 0.96
+    "raw_text": "PORT 24 MDF-01-R12-P24",
+    "port_label": "24",
+    "cable_tag": "MDF-01-R12-P24",
+    "ocr_conf": 0.95
   },
   "evidence-good": {
-    "panel_id": "PANEL-A",
-    "port_label": "A-24",
-    "cable_tag": "CAB-9001",
-    "port_confidence": 0.97,
-    "cable_confidence": 0.97
+    "raw_text": "PORT 24 MDF-01-R12-P24",
+    "port_label": "24",
+    "cable_tag": "MDF-01-R12-P24",
+    "ocr_conf": 0.97
   },
   "evidence-bad-port": {
-    "panel_id": "PANEL-A",
-    "port_label": "A-99",
-    "cable_tag": "CAB-9001",
-    "port_confidence": 0.98,
-    "cable_confidence": 0.98
+    "raw_text": "PORT 99 MDF-01-R12-P24",
+    "port_label": "99",
+    "cable_tag": "MDF-01-R12-P24",
+    "ocr_conf": 0.98
   },
   "evidence-low-confidence": {
-    "panel_id": "PANEL-A",
-    "port_label": "A-24",
-    "cable_tag": "CAB-9001",
-    "port_confidence": 0.52,
-    "cable_confidence": 0.57
+    "raw_text": "B L U R R Y ?",
+    "port_label": null,
+    "cable_tag": null,
+    "ocr_conf": 0.40
   }
 }

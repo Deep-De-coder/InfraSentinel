@@ -60,6 +60,17 @@ curl -X POST http://localhost:8080/v1/evidence/upload \
   -F "file=@samples/images/.gitkeep"
 ```
 
+## Fastest Path To Working CV
+
+1. `make up`
+2. `make synth`
+3. Run only CV MCP server: `uv run python -m services.mcp_cv.server`
+4. Call tools with sample evidence IDs:
+   - `evidence-good`
+   - `evidence-low-confidence`
+
+CV pipeline now performs: crop -> OCR -> parse -> confidence scoring -> retake guidance.
+
 ## Mock Mode vs Prod Mode
 
 - `INFRASENTINEL_MODE=mock`:
@@ -86,6 +97,7 @@ curl -X POST http://localhost:8080/v1/evidence/upload \
 - `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`.
 - `NETBOX_URL`, `NETBOX_TOKEN`.
 - `ANTHROPIC_API_KEY`: if set, Claude is selected in agent runtime wiring.
+- `CV_MODE`: `mock` (default) or `tesseract`.
 - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` (optional).
 - `OTEL_EXPORTER_OTLP_ENDPOINT` (optional).
 
@@ -98,8 +110,14 @@ make eval
 
 `make eval` uses `npx promptfoo`, so Node.js is required for the evaluation harness.
 
+Optional OCR backend:
+- Install Python package: `uv add pytesseract`
+- Install system binary: `tesseract` (must be on PATH)
+- Set `CV_MODE=tesseract`
+
 ## Development Notes
 
 - MCP stdio servers must never write logs to stdout; all logs go to stderr.
 - Temporal workflow logic is deterministic and orchestration-first.
 - Step outcomes are persisted with audit events for traceability.
+- False-Green Rate is a key safety metric: low-confidence CV outputs should block progression and request retake.

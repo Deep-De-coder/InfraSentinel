@@ -10,7 +10,15 @@ from packages.agents.mop_compliance import MOPComplianceAgent
 from packages.agents.vision_verifier import VisionVerifierAgent
 from packages.core.audit import make_audit_event
 from packages.core.db import persist_audit_event, persist_step_result
-from packages.core.models import ChangeStep, EvidenceRef, StepResult, StepStatus, StepType
+from packages.core.models import (
+    CVCableTagResult,
+    CVPortLabelResult,
+    ChangeStep,
+    EvidenceRef,
+    StepResult,
+    StepStatus,
+    StepType,
+)
 from packages.mcp.client import MCPToolRouter
 from services.mcp_camera.handlers import CameraHandlers
 from services.mcp_cv.handlers import CVHandlers
@@ -92,7 +100,16 @@ async def process_step(change_id: str, step: dict, evidence_id: str | None = Non
     )
     port = await deps.tools.read_port_label(evidence_id=evidence.evidence_id)
     cable = await deps.tools.read_cable_tag(evidence_id=evidence.evidence_id)
-    vision = await deps.vision_agent.run(port=port, cable=cable)
+    port_core = CVPortLabelResult(
+        panel_id=port.panel_id or "UNKNOWN",
+        port_label=port.port_label or "UNKNOWN",
+        confidence=port.confidence,
+    )
+    cable_core = CVCableTagResult(
+        cable_tag=cable.cable_tag or "UNKNOWN",
+        confidence=cable.confidence,
+    )
+    vision = await deps.vision_agent.run(port=port_core, cable=cable_core)
     if not vision.accept:
         result = StepResult(
             change_id=change_id,
@@ -104,9 +121,9 @@ async def process_step(change_id: str, step: dict, evidence_id: str | None = Non
     else:
         validation = await deps.tools.validate_observed(
             change_id=change_id,
-            panel_id=port.panel_id,
-            port_label=port.port_label,
-            cable_tag=cable.cable_tag,
+            panel_id=port_core.panel_id,
+            port_label=port_core.port_label,
+            cable_tag=cable_core.cable_tag,
         )
         cmdb = await deps.cmdb_agent.run(validation=validation)
         result = StepResult(

@@ -1,8 +1,7 @@
 from pydantic import BaseModel, Field
 
+from packages.cv.schema import CableTagResult, PortLabelResult
 from packages.core.models import (
-    CVCableTagResult,
-    CVPortLabelResult,
     ChangeRequest,
     EvidenceRef,
     ExpectedMapping,
@@ -57,8 +56,8 @@ class TicketingPostStepResultOutput(BaseModel):
 
 ToolOutput = (
     EvidenceRef
-    | CVCableTagResult
-    | CVPortLabelResult
+    | CableTagResult
+    | PortLabelResult
     | ExpectedMapping
     | ChangeRequest
     | TicketingPostStepResultOutput

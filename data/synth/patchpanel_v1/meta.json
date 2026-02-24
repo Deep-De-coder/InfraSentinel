@@ -1,0 +1,6 @@
+{
+  "name": "patchpanel_v1",
+  "description": "Synthetic patch panel dataset scaffold",
+  "generator": "scripts/data/generate_synth_patchpanel.py",
+  "count": 0
+}

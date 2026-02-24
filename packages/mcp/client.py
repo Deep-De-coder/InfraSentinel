@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
 
+from packages.cv.schema import CableTagResult, PortLabelResult
 from packages.core.models import (
-    CVCableTagResult,
-    CVPortLabelResult,
     ChangeRequest,
     EvidenceRef,
     ExpectedMapping,
@@ -41,10 +40,10 @@ class MCPToolRouter:
     ) -> EvidenceRef:
         return await self.camera_store_evidence(path=path, data_b64=data_b64, metadata=metadata or {})
 
-    async def read_port_label(self, evidence_id: str) -> CVPortLabelResult:
+    async def read_port_label(self, evidence_id: str) -> PortLabelResult:
         return await self.cv_read_port_label(evidence_id=evidence_id)
 
-    async def read_cable_tag(self, evidence_id: str) -> CVCableTagResult:
+    async def read_cable_tag(self, evidence_id: str) -> CableTagResult:
         return await self.cv_read_cable_tag(evidence_id=evidence_id)
 
     async def get_expected_mapping(self, change_id: str) -> ExpectedMapping:

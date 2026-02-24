@@ -1,20 +1,35 @@
 from __future__ import annotations
 
-from packages.core.models import CVCableTagResult, CVPortLabelResult
-from services.common import load_sample_json
+import os
+from pathlib import Path
+
+from packages.cv.ocr_backends import OCRBackend
+from packages.cv.ocr_backends import MockOCRBackend, TesseractOCRBackend, resolve_local_image_path
+from packages.cv.pipeline import read_cable_tag, read_port_label
+from packages.cv.schema import CableTagResult, PortLabelResult
 
 
 class CVHandlers:
-    async def read_port_label(self, evidence_id: str) -> CVPortLabelResult:
-        data = load_sample_json("cv_outputs.json")
-        item = data.get(evidence_id, data["default"])
-        return CVPortLabelResult(
-            panel_id=item["panel_id"],
-            port_label=item["port_label"],
-            confidence=item["port_confidence"],
-        )
+    def __init__(self, cv_mode: str | None = None):
+        self.cv_mode = (cv_mode or os.getenv("CV_MODE", "mock")).lower()
+        self.ocr_backend = self._build_backend()
 
-    async def read_cable_tag(self, evidence_id: str) -> CVCableTagResult:
-        data = load_sample_json("cv_outputs.json")
-        item = data.get(evidence_id, data["default"])
-        return CVCableTagResult(cable_tag=item["cable_tag"], confidence=item["cable_confidence"])
+    def _build_backend(self) -> OCRBackend:
+        if self.cv_mode == "tesseract":
+            return TesseractOCRBackend()
+        return MockOCRBackend()
+
+    def _resolve_image(self, evidence_id: str) -> str | bytes:
+        path = resolve_local_image_path(evidence_id)
+        if path:
+            return str(path)
+        fallback = Path(__file__).resolve().parents[2] / "samples" / "images" / "default.png"
+        return str(fallback)
+
+    async def read_port_label(self, evidence_id: str) -> PortLabelResult:
+        image = self._resolve_image(evidence_id)
+        return read_port_label(image, ocr_backend=self.ocr_backend, evidence_id=evidence_id)
+
+    async def read_cable_tag(self, evidence_id: str) -> CableTagResult:
+        image = self._resolve_image(evidence_id)
+        return read_cable_tag(image, ocr_backend=self.ocr_backend, evidence_id=evidence_id)
