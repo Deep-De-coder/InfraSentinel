@@ -56,6 +56,7 @@ async def run_worker() -> None:
             finalize_change,
             activity_load_change,
             activity_set_scenario,
+            activity_quality_gate,
             activity_cv_extract,
             activity_cmdb_validate,
             activity_request_approval,

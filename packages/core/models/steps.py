@@ -78,5 +78,7 @@ class StepResult(BaseModel):
     notes: str | None = None
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     approver: str | None = None
+    quality: dict[str, Any] | None = None
+    quality_fail_reason: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

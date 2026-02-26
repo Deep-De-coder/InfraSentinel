@@ -56,3 +56,14 @@ def set_scenario_config(change_id: str, scenario: str | None) -> None:
     data = get_scenario_config()
     data[change_id] = {"scenario": scenario or "CHG-001_A"}
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def get_latest_step_result(change_id: str, step_id: str) -> dict | None:
+    """Get latest StepResult for change_id/step_id from proofpack."""
+    proofpack = load_proofpack(change_id)
+    if not proofpack:
+        return None
+    for s in reversed(proofpack.steps):
+        if s.step_id == step_id:
+            return s.model_dump(mode="json")
+    return None

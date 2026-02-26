@@ -140,6 +140,41 @@ Optional OCR backend:
 - Install system binary: `tesseract` (must be on PATH)
 - Set `CV_MODE=tesseract`
 
+## Evidence Quality Gate
+
+Before running OCR/CMDB validation, InfraSentinel checks image quality. If blur, brightness, glare, or resolution fail thresholds, the step is marked `NEEDS_RETAKE` and the API returns actionable guidance—no CV/CMDB calls are made.
+
+**Thresholds** (env-configurable): `QUALITY_BLUR_MIN=120`, `QUALITY_BRIGHTNESS_MIN=60`, `QUALITY_GLARE_MAX=0.08`, `QUALITY_MIN_W=800`, `QUALITY_MIN_H=600`.
+
+**Example: upload bad-quality evidence → receive guidance**
+
+```bash
+# Start change
+curl -X POST http://localhost:8080/v1/changes/start \
+  -H "Content-Type: application/json" \
+  -d '{"change_id":"CHG-001","scenario":"CHG-001_A"}'
+
+# Upload blurry evidence (e.g. EVID-002-BADQUALITY from fixtures)
+curl -X POST http://localhost:8080/v1/evidence/upload \
+  -F "change_id=CHG-001" \
+  -F "step_id=S1" \
+  -F "evidence_id=EVID-002-BADQUALITY"
+# Response: {"evidence_id":"EVID-002-BADQUALITY","status":"needs_retake","guidance":["Hold steady and tap to focus; avoid motion.",...],"quality":{...}}
+
+# Retake with good evidence
+curl -X POST http://localhost:8080/v1/evidence/upload \
+  -F "change_id=CHG-001" \
+  -F "step_id=S1" \
+  -F "evidence_id=EVID-001"
+# Response: {"evidence_id":"EVID-001","status":"verifying"}
+```
+
+**Get step status** (including quality/guidance when `needs_retake`):
+
+```bash
+curl http://localhost:8080/v1/changes/CHG-001/steps/S1
+```
+
 ## Scenario Fixtures
 
 - **CHG-001_A**: Happy path, all evidence IDs match expected mapping.

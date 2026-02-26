@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     cv_mode: str = Field(default="mock", alias="CV_MODE")
     scenario: str = Field(default="CHG-001_A", alias="SCENARIO")
 
+    blur_min: float = Field(default=120.0, alias="QUALITY_BLUR_MIN")
+    brightness_min: float = Field(default=60.0, alias="QUALITY_BRIGHTNESS_MIN")
+    glare_max: float = Field(default=0.08, alias="QUALITY_GLARE_MAX")
+    min_width: int = Field(default=800, alias="QUALITY_MIN_W")
+    min_height: int = Field(default=600, alias="QUALITY_MIN_H")
+
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     langfuse_public_key: str | None = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
     langfuse_secret_key: str | None = Field(default=None, alias="LANGFUSE_SECRET_KEY")

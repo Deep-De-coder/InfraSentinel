@@ -13,6 +13,7 @@ with workflow.unsafe.imports_passed_through():
         activity_cv_extract,
         activity_load_change,
         activity_persist_step_and_proofpack,
+        activity_quality_gate,
         activity_request_approval,
         activity_set_scenario,
     )
@@ -95,6 +96,60 @@ class ChangeExecutionWorkflow:
                 )
                 evidence_id = self._evidence_signal.pop(step_id, "")
                 step_result = on_evidence_uploaded(step_result, evidence_id)
+
+            if step_result.status == StepStatus.VERIFYING and verify:
+                qgate = await workflow.execute_activity(
+                    activity_quality_gate,
+                    args=[data.change_id, step_id, evidence_id],
+                    start_to_close_timeout=timedelta(seconds=10),
+                )
+                if not qgate.get("pass"):
+                    step_result = StepResult(
+                        change_id=data.change_id,
+                        step_id=step_id,
+                        status=StepStatus.NEEDS_RETAKE,
+                        evidence_ids=step_result.evidence_ids,
+                        guidance=qgate.get("guidance", []),
+                        quality=qgate.get("metrics"),
+                        quality_fail_reason="Image quality below threshold",
+                        tool_calls=[qgate.get("tool_call", {})],
+                    )
+                    await workflow.execute_activity(
+                        activity_persist_step_and_proofpack,
+                        args=[data.change_id, step_result.model_dump(mode="json"), evidence_id],
+                        start_to_close_timeout=timedelta(seconds=10),
+                    )
+                    step_results.append(step_result.model_dump(mode="json"))
+                    while True:
+                        await workflow.wait_condition(
+                            lambda s=step_id: s in self._evidence_signal,
+                            timeout=timedelta(hours=1),
+                        )
+                        evidence_id = self._evidence_signal.pop(step_id, "")
+                        step_result = on_evidence_uploaded(step_result, evidence_id)
+                        qgate = await workflow.execute_activity(
+                            activity_quality_gate,
+                            args=[data.change_id, step_id, evidence_id],
+                            start_to_close_timeout=timedelta(seconds=10),
+                        )
+                        if qgate.get("pass"):
+                            break
+                        step_result = StepResult(
+                            change_id=data.change_id,
+                            step_id=step_id,
+                            status=StepStatus.NEEDS_RETAKE,
+                            evidence_ids=step_result.evidence_ids,
+                            guidance=qgate.get("guidance", []),
+                            quality=qgate.get("metrics"),
+                            quality_fail_reason="Image quality below threshold",
+                            tool_calls=step_result.tool_calls + [qgate.get("tool_call", {})],
+                        )
+                        await workflow.execute_activity(
+                            activity_persist_step_and_proofpack,
+                            args=[data.change_id, step_result.model_dump(mode="json"), evidence_id],
+                            start_to_close_timeout=timedelta(seconds=10),
+                        )
+                        step_results.append(step_result.model_dump(mode="json"))
 
             if step_result.status == StepStatus.VERIFYING and verify:
                 ev_id = step_result.evidence_ids[-1] if step_result.evidence_ids else ""

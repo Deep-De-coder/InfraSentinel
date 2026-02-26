@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import cv2
+import numpy as np
 from temporalio import activity
 
+from packages.core.config import get_settings
+from packages.core.fixtures.evidence import get_evidence_bytes
 from packages.core.fixtures.loaders import load_change
 from packages.core.logic.proofpack import update_proofpack
 from packages.core.models.proofpack import EvidenceRef, ProofPack
@@ -14,6 +18,8 @@ from packages.core.runtime import (
     save_proofpack,
     set_scenario_config,
 )
+from packages.core.vision.quality import compute_image_quality
+from packages.cv.guidance import retake_guidance
 from services.mcp_cv.handlers import CVHandlers
 from services.mcp_netbox.handlers import NetboxHandlers
 from services.mcp_ticketing.handlers import TicketingHandlers
@@ -28,6 +34,64 @@ def configure_handlers(cv: CVHandlers, netbox: NetboxHandlers, ticketing: Ticket
     _cv_handlers = cv
     _netbox_handlers = netbox
     _ticketing_handlers = ticketing
+
+
+@activity.defn
+async def activity_quality_gate(
+    change_id: str,
+    step_id: str,
+    evidence_id: str,
+) -> dict:
+    """Compute quality metrics. Returns pass, metrics, guidance, tool_call."""
+    settings = get_settings()
+    data = get_evidence_bytes(
+        evidence_id,
+        change_id=change_id,
+        local_evidence_dir=settings.local_evidence_dir,
+    )
+    if not data:
+        return {
+            "pass": False,
+            "metrics": None,
+            "guidance": ["Evidence file not found; please upload again."],
+            "tool_call": {"tool": "quality_gate", "error": "evidence_not_found", "decision": "needs_retake"},
+        }
+    arr = np.frombuffer(data, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return {
+            "pass": False,
+            "metrics": None,
+            "guidance": ["Invalid image; please upload a valid photo."],
+            "tool_call": {"tool": "quality_gate", "error": "decode_failed", "decision": "needs_retake"},
+        }
+    metrics = compute_image_quality(
+        img,
+        blur_min=settings.blur_min,
+        brightness_min=settings.brightness_min,
+        glare_max=settings.glare_max,
+        min_w=settings.min_width,
+        min_h=settings.min_height,
+    )
+    fail = metrics.is_too_blurry or metrics.is_too_dark or metrics.is_too_glary or metrics.is_low_res
+    if fail:
+        guidance = retake_guidance(metrics)
+        return {
+            "pass": False,
+            "metrics": metrics.model_dump(),
+            "guidance": guidance,
+            "tool_call": {
+                "tool": "quality_gate",
+                "metrics": metrics.model_dump(),
+                "decision": "needs_retake",
+            },
+        }
+    return {
+        "pass": True,
+        "metrics": metrics.model_dump(),
+        "guidance": [],
+        "tool_call": {"tool": "quality_gate", "metrics": metrics.model_dump(), "decision": "pass"},
+    }
 
 
 @activity.defn

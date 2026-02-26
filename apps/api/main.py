@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
+import cv2
+import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from temporalio.client import Client
 
@@ -17,7 +17,9 @@ from apps.api.schemas import (
 from apps.worker.workflows.change_execution_workflow import ChangeExecutionWorkflow, WorkflowInput
 from packages.core.config import get_settings
 from packages.core.observability import configure_observability
-from packages.core.runtime import load_proofpack
+from packages.core.runtime import get_latest_step_result, load_proofpack
+from packages.core.vision.quality import compute_image_quality
+from packages.cv.guidance import retake_guidance
 
 app = FastAPI(title="InfraSentinel API")
 
@@ -50,15 +52,20 @@ async def start_change(req: StartChangeRequest) -> StartChangeResponse:
     return StartChangeResponse(workflow_id=workflow_id, run_id=handle.result_run_id or "")
 
 
-@app.post("/v1/evidence/upload", response_model=UploadEvidenceResponse)
+@app.post("/v1/evidence/upload")
 async def upload_evidence(
     change_id: str = Form(...),
     step_id: str = Form(...),
     evidence_id: str | None = Form(None),
     file: UploadFile | None = File(None),
-) -> UploadEvidenceResponse:
+):
     settings = get_settings()
+    data: bytes
     if evidence_id:
+        from packages.core.fixtures.evidence import get_evidence_bytes
+        data = get_evidence_bytes(evidence_id, change_id, settings.local_evidence_dir)
+        if not data:
+            raise HTTPException(status_code=404, detail="Evidence not found")
         out_id = evidence_id
     elif file and file.filename:
         store = get_evidence_store(settings)
@@ -72,11 +79,31 @@ async def upload_evidence(
     else:
         raise HTTPException(status_code=400, detail="Provide evidence_id or file")
 
+    arr = np.frombuffer(data, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is not None:
+        metrics = compute_image_quality(
+            img,
+            blur_min=settings.blur_min,
+            brightness_min=settings.brightness_min,
+            glare_max=settings.glare_max,
+            min_w=settings.min_width,
+            min_h=settings.min_height,
+        )
+        fail = metrics.is_too_blurry or metrics.is_too_dark or metrics.is_too_glary or metrics.is_low_res
+        if fail:
+            return {
+                "evidence_id": out_id,
+                "status": "needs_retake",
+                "guidance": retake_guidance(metrics),
+                "quality": metrics.model_dump(),
+            }
+
     client: Client = await get_temporal_client(settings)
     workflow_id = f"change-{change_id}"
     handle = client.get_workflow_handle(workflow_id)
     await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, step_id, out_id)
-    return UploadEvidenceResponse(evidence_id=out_id)
+    return {"evidence_id": out_id, "status": "verifying"}
 
 
 @app.post("/v1/changes/{change_id}/approve")
@@ -86,6 +113,14 @@ async def approve_change(change_id: str, req: ApproveRequest) -> dict:
     handle = client.get_workflow_handle(workflow_id)
     await handle.signal(ChangeExecutionWorkflow.approval_granted, req.step_id, req.approver)
     return {"ok": True, "change_id": change_id, "step_id": req.step_id}
+
+
+@app.get("/v1/changes/{change_id}/steps/{step_id}")
+async def get_step(change_id: str, step_id: str) -> dict:
+    result = get_latest_step_result(change_id, step_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Step result not found")
+    return result
 
 
 @app.get("/v1/changes/{change_id}/proofpack")
