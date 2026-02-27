@@ -14,12 +14,15 @@ from apps.worker.activities import (
 )
 from apps.worker.activities_execution import (
     configure_handlers,
+    activity_cmdb_advice,
     activity_cmdb_validate,
     activity_cv_extract,
+    activity_get_mop_prompt,
     activity_load_change,
     activity_persist_step_and_proofpack,
     activity_request_approval,
     activity_set_scenario,
+    activity_vision_advice,
 )
 from apps.worker.workflows.change_execution_workflow import ChangeExecutionWorkflow
 from apps.worker.workflows.change_workflow import ChangeWorkflow
@@ -56,9 +59,12 @@ async def run_worker() -> None:
             finalize_change,
             activity_load_change,
             activity_set_scenario,
+            activity_get_mop_prompt,
             activity_quality_gate,
             activity_cv_extract,
+            activity_vision_advice,
             activity_cmdb_validate,
+            activity_cmdb_advice,
             activity_request_approval,
             activity_persist_step_and_proofpack,
         ],

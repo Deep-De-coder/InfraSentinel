@@ -6,13 +6,20 @@ InfraSentinel guides data-center technicians through change steps, verifies rack
 
 ## Architecture
 
+- **Temporal** = durable orchestrator (workflows, signals, activities).
+- **Worker** = safety gatekeeper; deterministic quality/confidence/CMDB rules stay in worker state machine.
+- **A2A services** = specialized advisors (MOP, Vision, CMDB) over HTTP; interoperable, advisory only.
+- **MCP servers** = tool mesh (camera, cv, netbox, ticketing).
+- **Claude** = generates human-readable prompts only (tech_prompt, escalation_text); never decides accept/block.
+
 - `apps/api/`: FastAPI API for starting workflows and uploading evidence.
 - `apps/worker/`: Temporal worker hosting durable workflows and activities.
 - `packages/core/`: Typed domain models, config, DB schema, storage interfaces.
-- `packages/agents/`: Typed decision agents (PydanticAI-compatible wrappers).
+- `packages/agents/`: Agent logic (mop, vision, cmdb) + LLM wiring.
+- `packages/a2a/`: A2A message schema and HTTP client.
 - `packages/mcp/`: Shared MCP tool schemas and client abstraction.
 - `services/mcp_*`: MCP tool servers (camera, cv, netbox, ticketing).
-- `a2a/`: Agent-to-agent placeholder (`agent_card.json`, minimal HTTP endpoints).
+- `services/a2a_*_agent/`: A2A agent services (MOP, Vision, CMDB).
 - `infra/`: Local infrastructure via Docker Compose.
 - `tests/`: Unit tests + workflow tests.
 - `eval/`: Promptfoo harness for false-green focused evaluation.
@@ -121,6 +128,8 @@ CV pipeline now performs: crop -> OCR -> parse -> confidence scoring -> retake g
 - `LOCAL_EVIDENCE_DIR`: default `./.data/evidence`.
 - `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`.
 - `NETBOX_URL`, `NETBOX_TOKEN`.
+- `A2A_MODE`: `off` (default) or `http`. If `http`, worker calls A2A agent services.
+- `A2A_MOP_URL`, `A2A_VISION_URL`, `A2A_CMDB_URL`: agent service URLs (default localhost:8091–8093).
 - `ANTHROPIC_API_KEY`: if set, Claude is selected in agent runtime wiring.
 - `CV_MODE`: `mock` (default) or `tesseract`.
 - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` (optional).
@@ -174,6 +183,40 @@ curl -X POST http://localhost:8080/v1/evidence/upload \
 ```bash
 curl http://localhost:8080/v1/changes/CHG-001/steps/S1
 ```
+
+**Get technician prompt** (from MOP agent):
+
+```bash
+curl http://localhost:8080/v1/changes/CHG-001/steps/S1/prompt
+```
+
+## A2A Agent Services
+
+InfraSentinel can run with **A2A mode off** (default) or **on**:
+
+- **A2A off**: Agent logic runs locally in the worker; no extra services. Fully deterministic, no keys.
+- **A2A on**: Worker calls 3 HTTP agent services for tech prompts, vision guidance, and escalation text.
+
+**Run with A2A off** (default):
+
+```bash
+make up
+make dev
+make mcp
+# A2A_MODE=off (default); worker uses local mop_advice, vision_advice, cmdb_advice
+```
+
+**Run with A2A on**:
+
+```bash
+docker compose -f infra/docker-compose.yml up -d
+# Start A2A agents (included in compose): a2a-mop-agent, a2a-vision-agent, a2a-cmdb-agent
+# Then run API + worker with:
+A2A_MODE=http A2A_MOP_URL=http://localhost:8091 A2A_VISION_URL=http://localhost:8092 A2A_CMDB_URL=http://localhost:8093 make dev
+make mcp
+```
+
+Safety rules never change: the worker remains the final gatekeeper. A2A services only provide advice (guidance, prompts) and never decide accept/block.
 
 ## Scenario Fixtures
 

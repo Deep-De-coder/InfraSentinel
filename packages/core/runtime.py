@@ -67,3 +67,30 @@ def get_latest_step_result(change_id: str, step_id: str) -> dict | None:
         if s.step_id == step_id:
             return s.model_dump(mode="json")
     return None
+
+
+def _step_prompts_path() -> Path:
+    return _runtime_dir() / "step_prompts.json"
+
+
+def save_step_prompt(change_id: str, step_id: str, tech_prompt: str) -> None:
+    """Store latest technician prompt for a step."""
+    path = _step_prompts_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data: dict = {}
+    if path.exists():
+        data = json.loads(path.read_text(encoding="utf-8"))
+    key = f"{change_id}:{step_id}"
+    data[key] = {"tech_prompt": tech_prompt}
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def get_step_prompt(change_id: str, step_id: str) -> str | None:
+    """Get latest technician prompt for a step."""
+    path = _step_prompts_path()
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    key = f"{change_id}:{step_id}"
+    entry = data.get(key, {})
+    return entry.get("tech_prompt")

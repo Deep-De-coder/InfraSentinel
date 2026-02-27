@@ -63,6 +63,39 @@ services:
     volumes:
       - minio_data:/data
 
+  a2a-mop-agent:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.agent
+    container_name: a2a-mop-agent
+    command: ["python", "-m", "uvicorn", "services.a2a_mop_agent.server:app", "--host", "0.0.0.0", "--port", "8091"]
+    ports:
+      - "8091:8091"
+    environment:
+      - A2A_MODE=off
+
+  a2a-vision-agent:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.agent
+    container_name: a2a-vision-agent
+    command: ["python", "-m", "uvicorn", "services.a2a_vision_agent.server:app", "--host", "0.0.0.0", "--port", "8092"]
+    ports:
+      - "8092:8092"
+    environment:
+      - A2A_MODE=off
+
+  a2a-cmdb-agent:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.agent
+    container_name: a2a-cmdb-agent
+    command: ["python", "-m", "uvicorn", "services.a2a_cmdb_agent.server:app", "--host", "0.0.0.0", "--port", "8093"]
+    ports:
+      - "8093:8093"
+    environment:
+      - A2A_MODE=off
+
 volumes:
   temporal_postgres_data:
   app_postgres_data:

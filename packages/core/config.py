@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     min_width: int = Field(default=800, alias="QUALITY_MIN_W")
     min_height: int = Field(default=600, alias="QUALITY_MIN_H")
 
+    a2a_mode: str = Field(default="off", alias="A2A_MODE")
+    a2a_mop_url: str = Field(default="http://localhost:8091", alias="A2A_MOP_URL")
+    a2a_vision_url: str = Field(default="http://localhost:8092", alias="A2A_VISION_URL")
+    a2a_cmdb_url: str = Field(default="http://localhost:8093", alias="A2A_CMDB_URL")
+
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     langfuse_public_key: str | None = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
     langfuse_secret_key: str | None = Field(default=None, alias="LANGFUSE_SECRET_KEY")

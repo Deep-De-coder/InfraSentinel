@@ -53,6 +53,7 @@ class TicketingHandlers:
         step_id: str,
         reason: str,
         evidence_ids: list[str] | None = None,
+        escalation_text: str | None = None,
     ) -> dict:
         approval_id = f"APR-{change_id}-{step_id}"
         entry = {
@@ -62,6 +63,7 @@ class TicketingHandlers:
             "step_id": step_id,
             "reason": reason,
             "evidence_ids": evidence_ids or [],
+            "escalation_text": escalation_text,
         }
         _append_log(entry)
         return {"approval_request_id": approval_id, "ok": True}

@@ -17,7 +17,7 @@ from apps.api.schemas import (
 from apps.worker.workflows.change_execution_workflow import ChangeExecutionWorkflow, WorkflowInput
 from packages.core.config import get_settings
 from packages.core.observability import configure_observability
-from packages.core.runtime import get_latest_step_result, load_proofpack
+from packages.core.runtime import get_latest_step_result, get_step_prompt, load_proofpack
 from packages.core.vision.quality import compute_image_quality
 from packages.cv.guidance import retake_guidance
 
@@ -113,6 +113,15 @@ async def approve_change(change_id: str, req: ApproveRequest) -> dict:
     handle = client.get_workflow_handle(workflow_id)
     await handle.signal(ChangeExecutionWorkflow.approval_granted, req.step_id, req.approver)
     return {"ok": True, "change_id": change_id, "step_id": req.step_id}
+
+
+@app.get("/v1/changes/{change_id}/steps/{step_id}/prompt")
+async def get_step_prompt_endpoint(change_id: str, step_id: str) -> dict:
+    """Get latest technician prompt for the step (from MOP agent)."""
+    prompt = get_step_prompt(change_id, step_id)
+    if prompt is None:
+        raise HTTPException(status_code=404, detail="Step prompt not found")
+    return {"change_id": change_id, "step_id": step_id, "tech_prompt": prompt}
 
 
 @app.get("/v1/changes/{change_id}/steps/{step_id}")

@@ -9,13 +9,16 @@ from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
     from apps.worker.activities_execution import (
+        activity_cmdb_advice,
         activity_cmdb_validate,
         activity_cv_extract,
+        activity_get_mop_prompt,
         activity_load_change,
         activity_persist_step_and_proofpack,
         activity_quality_gate,
         activity_request_approval,
         activity_set_scenario,
+        activity_vision_advice,
     )
     from packages.core.logic.proofpack import update_proofpack
     from packages.core.logic.state_machine import (
@@ -88,6 +91,12 @@ class ChangeExecutionWorkflow:
                 "step_id": step_id,
                 "status": step_result.status.value,
             }
+
+            await workflow.execute_activity(
+                activity_get_mop_prompt,
+                args=[data.change_id, step_id, step_def],
+                start_to_close_timeout=timedelta(seconds=10),
+            )
 
             if initial_status == StepStatus.AWAITING_EVIDENCE:
                 await workflow.wait_condition(
@@ -175,6 +184,19 @@ class ChangeExecutionWorkflow:
                 to.confidence = tag_out.get("confidence", 0)
 
                 step_result = apply_cv_result(step_def_model, step_result, po, to)
+                if step_result.status == StepStatus.NEEDS_RETAKE:
+                    vision_guidance = await workflow.execute_activity(
+                        activity_vision_advice,
+                        args=[
+                            step_def,
+                            qgate.get("metrics"),
+                            {"panel_id": po.panel_id, "port_label": po.port_label, "confidence": po.confidence},
+                            {"cable_tag": to.cable_tag, "confidence": to.confidence},
+                        ],
+                        start_to_close_timeout=timedelta(seconds=10),
+                    )
+                    if vision_guidance:
+                        step_result = step_result.model_copy(update={"guidance": vision_guidance})
 
                 while step_result.status == StepStatus.NEEDS_RETAKE:
                     await workflow.wait_condition(
@@ -196,6 +218,19 @@ class ChangeExecutionWorkflow:
                     to.cable_tag = tag_out.get("cable_tag")
                     to.confidence = tag_out.get("confidence", 0)
                     step_result = apply_cv_result(step_def_model, step_result, po, to)
+                    if step_result.status == StepStatus.NEEDS_RETAKE:
+                        vision_guidance = await workflow.execute_activity(
+                            activity_vision_advice,
+                            args=[
+                                step_def,
+                                None,
+                                {"panel_id": po.panel_id, "port_label": po.port_label, "confidence": po.confidence},
+                                {"cable_tag": to.cable_tag, "confidence": to.confidence},
+                            ],
+                            start_to_close_timeout=timedelta(seconds=10),
+                        )
+                        if vision_guidance:
+                            step_result = step_result.model_copy(update={"guidance": vision_guidance})
 
                 if step_result.status == StepStatus.VERIFYING:
                     cmdb_out = await workflow.execute_activity(
@@ -222,6 +257,11 @@ class ChangeExecutionWorkflow:
                         and approval
                         and approval.get("required")
                     ):
+                        escalation_text = await workflow.execute_activity(
+                            activity_cmdb_advice,
+                            args=[step_def, {"match": co.match, "reason": co.reason}],
+                            start_to_close_timeout=timedelta(seconds=10),
+                        )
                         await workflow.execute_activity(
                             activity_request_approval,
                             args=[
@@ -229,6 +269,7 @@ class ChangeExecutionWorkflow:
                                 step_id,
                                 step_result.cmdb_reason or "",
                                 step_result.evidence_ids,
+                                escalation_text,
                             ],
                             start_to_close_timeout=timedelta(seconds=5),
                         )
