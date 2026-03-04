@@ -1,1 +1,1 @@
-"""Typed decision agents for InfraSentinel."""
+"""Typed decision agents for InfraSentinel (MOP, Vision, CMDB)."""
