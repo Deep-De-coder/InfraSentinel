@@ -92,10 +92,12 @@ async def upload_evidence(
         )
         fail = metrics.is_too_blurry or metrics.is_too_dark or metrics.is_too_glary or metrics.is_low_res
         if fail:
+            guidance = retake_guidance(metrics)
             return {
                 "evidence_id": out_id,
                 "status": "needs_retake",
-                "guidance": retake_guidance(metrics),
+                "message": "Image quality check failed. Please retake the photo.",
+                "guidance": guidance,
                 "quality": metrics.model_dump(),
             }
 
@@ -103,7 +105,7 @@ async def upload_evidence(
     workflow_id = f"change-{change_id}"
     handle = client.get_workflow_handle(workflow_id)
     await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, step_id, out_id)
-    return {"evidence_id": out_id, "status": "verifying"}
+    return {"evidence_id": out_id, "status": "verifying", "message": "Evidence received. Verifying..."}
 
 
 @app.post("/v1/changes/{change_id}/approve")
