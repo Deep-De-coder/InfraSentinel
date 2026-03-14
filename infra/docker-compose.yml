@@ -96,7 +96,72 @@ services:
     environment:
       - A2A_MODE=off
 
+  # NetBox dev profile
+  netbox-postgres:
+    image: postgres:15-alpine
+    container_name: netbox-postgres
+    profiles:
+      - dev
+    environment:
+      POSTGRES_DB: netbox
+      POSTGRES_USER: netbox
+      POSTGRES_PASSWORD: netbox
+    ports:
+      - "5434:5432"
+    volumes:
+      - netbox_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netbox -d netbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  netbox-redis:
+    image: redis:7-alpine
+    container_name: netbox-redis
+    profiles:
+      - dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  netbox:
+    image: netboxcommunity/netbox:latest
+    container_name: netbox
+    profiles:
+      - dev
+    depends_on:
+      netbox-postgres:
+        condition: service_healthy
+      netbox-redis:
+        condition: service_healthy
+    environment:
+      DB_HOST: netbox-postgres
+      DB_PORT: "5432"
+      DB_NAME: netbox
+      DB_USER: netbox
+      DB_PASSWORD: netbox
+      REDIS_HOST: netbox-redis
+      REDIS_PORT: "6379"
+      REDIS_CACHE_HOST: netbox-redis
+      REDIS_CACHE_PORT: "6379"
+      SUPERUSER_NAME: admin
+      SUPERUSER_EMAIL: admin@example.com
+      SUPERUSER_PASSWORD: admin
+      ALLOWED_HOSTS: "*"
+    ports:
+      - "8001:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/login/"]
+      start_period: 90s
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   temporal_postgres_data:
   app_postgres_data:
   minio_data:
+  netbox_postgres_data:

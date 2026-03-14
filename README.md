@@ -128,6 +128,10 @@ CV pipeline now performs: crop -> OCR -> parse -> confidence scoring -> retake g
 - `LOCAL_EVIDENCE_DIR`: default `./.data/evidence`.
 - `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`.
 - `NETBOX_URL`, `NETBOX_TOKEN`.
+- `NETBOX_MODE`: `mock` (default) or `netbox`. If `netbox`, use real NetBox REST API.
+- `NETBOX_URL`, `NETBOX_TOKEN`: NetBox API URL and token (for netbox mode).
+- `INFRA_API_KEY`: if set, write endpoints require `X-INFRA-KEY` header.
+- `AUTH_READS`: `true` to require auth for read endpoints (proofpack, steps).
 - `A2A_MODE`: `off` (default) or `http`. If `http`, worker calls A2A agent services.
 - `A2A_MOP_URL`, `A2A_VISION_URL`, `A2A_CMDB_URL`: agent service URLs (default localhost:8091–8093).
 - `ANTHROPIC_API_KEY`: if set, Claude is selected in agent runtime wiring.
@@ -217,6 +221,39 @@ make mcp
 ```
 
 Safety rules never change: the worker remains the final gatekeeper. A2A services only provide advice (guidance, prompts) and never decide accept/block.
+
+## Dev Mode with NetBox
+
+Run InfraSentinel against a real NetBox instance for DCIM/CMDB validation:
+
+1. Start infra with NetBox (profile dev):
+
+```bash
+docker compose -f infra/docker-compose.yml --profile dev up -d
+```
+
+2. Wait for NetBox (~2 min), then create an API token in the NetBox UI (admin/admin).
+
+3. Seed NetBox with sample data:
+
+```bash
+NETBOX_URL=http://localhost:8001 NETBOX_TOKEN=your-token python infra/netbox/seed_netbox.py
+```
+
+4. Set env and run API + worker:
+
+```bash
+NETBOX_MODE=netbox NETBOX_URL=http://localhost:8001 NETBOX_TOKEN=your-token make dev
+make mcp
+```
+
+5. Start a change and upload evidence. The worker writes `runtime/approved_mappings/{change_id}.json` from fixtures; NetBox validates observed panel/port/cable against real DCIM data.
+
+**Smoke test** (requires docker, API, worker running):
+
+```bash
+./scripts/smoke/netbox_demo.sh
+```
 
 ## Scenario Fixtures
 

@@ -16,13 +16,16 @@ from packages.core.fixtures.loaders import load_change
 from packages.core.logic.proofpack import update_proofpack
 from packages.core.models.proofpack import EvidenceRef, ProofPack
 from packages.core.models.steps import StepDefinition, StepResult
+from packages.core.fixtures.loaders import load_expected_mapping
 from packages.core.runtime import (
     append_step_result_log,
     get_step_prompt,
     load_proofpack,
+    read_evidence_registry,
     save_proofpack,
     save_step_prompt,
     set_scenario_config,
+    write_approved_mapping,
 )
 from packages.core.vision.quality import compute_image_quality
 from packages.cv.guidance import retake_guidance
@@ -180,6 +183,10 @@ async def activity_load_change(change_id: str) -> dict:
 @activity.defn
 async def activity_set_scenario(change_id: str, scenario: str) -> None:
     set_scenario_config(change_id, scenario)
+    settings = get_settings()
+    if settings.netbox_mode == "netbox":
+        mapping = load_expected_mapping(change_id)
+        write_approved_mapping(change_id, mapping)
 
 
 @activity.defn
@@ -235,10 +242,17 @@ async def activity_persist_step_and_proofpack(
     result = StepResult.model_validate(step_result)
     append_step_result_log(result)
     proofpack = load_proofpack(change_id) or ProofPack(change_id=change_id)
-    ev_ref = (
-        EvidenceRef(evidence_id=evidence_id, path=f"evidence/{evidence_id}")
-        if evidence_id
-        else None
-    )
+    ev_ref = None
+    if evidence_id:
+        reg = read_evidence_registry(evidence_id)
+        if reg:
+            ev_ref = EvidenceRef(
+                evidence_id=evidence_id,
+                path=reg.get("object_key", f"evidence/{evidence_id}"),
+                uri=reg.get("uri"),
+                sha256=reg.get("sha256"),
+            )
+        else:
+            ev_ref = EvidenceRef(evidence_id=evidence_id, path=f"evidence/{evidence_id}")
     updated = update_proofpack(proofpack, change_id, result, ev_ref)
     save_proofpack(updated)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from temporalio.client import Client
 
 from apps.api.deps import get_db_session_factory, get_evidence_store, get_temporal_client
@@ -17,11 +17,36 @@ from apps.api.schemas import (
 from apps.worker.workflows.change_execution_workflow import ChangeExecutionWorkflow, WorkflowInput
 from packages.core.config import get_settings
 from packages.core.observability import configure_observability
-from packages.core.runtime import get_latest_step_result, get_step_prompt, load_proofpack
+from packages.core.runtime import (
+    get_latest_step_result,
+    get_step_prompt,
+    load_proofpack,
+    read_evidence_registry,
+    write_evidence_registry,
+)
+from packages.core.storage import MinioEvidenceStore
 from packages.core.vision.quality import compute_image_quality
 from packages.cv.guidance import retake_guidance
 
 app = FastAPI(title="InfraSentinel API")
+
+
+def _require_api_key(x_infra_key: str | None = Header(None, alias="X-INFRA-KEY")) -> None:
+    settings = get_settings()
+    if not settings.infra_api_key:
+        return
+    if not x_infra_key or x_infra_key != settings.infra_api_key:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-INFRA-KEY")
+
+
+def _require_read_auth(x_infra_key: str | None = Header(None, alias="X-INFRA-KEY")) -> None:
+    settings = get_settings()
+    if not settings.auth_reads:
+        return
+    if not settings.infra_api_key:
+        return
+    if not x_infra_key or x_infra_key != settings.infra_api_key:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-INFRA-KEY")
 
 
 @app.on_event("startup")
@@ -38,7 +63,7 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/v1/changes/start", response_model=StartChangeResponse)
-async def start_change(req: StartChangeRequest) -> StartChangeResponse:
+async def start_change(req: StartChangeRequest, _: None = Depends(_require_api_key)) -> StartChangeResponse:
     settings = get_settings()
     client = await get_temporal_client(settings)
     workflow_id = f"change-{req.change_id}"
@@ -58,6 +83,7 @@ async def upload_evidence(
     step_id: str = Form(...),
     evidence_id: str | None = Form(None),
     file: UploadFile | None = File(None),
+    _: None = Depends(_require_api_key),
 ):
     settings = get_settings()
     data: bytes
@@ -76,6 +102,13 @@ async def upload_evidence(
             metadata={"change_id": change_id, "step_id": step_id},
         )
         out_id = evidence.evidence_id
+        if isinstance(store, MinioEvidenceStore) and evidence.metadata:
+            meta = evidence.metadata
+            write_evidence_registry(out_id, {
+                "object_key": meta.get("object_key", f"evidence/{change_id}/{out_id}.jpg"),
+                "sha256": meta.get("sha256"),
+                "uri": evidence.uri,
+            })
     else:
         raise HTTPException(status_code=400, detail="Provide evidence_id or file")
 
@@ -109,7 +142,7 @@ async def upload_evidence(
 
 
 @app.post("/v1/changes/{change_id}/approve")
-async def approve_change(change_id: str, req: ApproveRequest) -> dict:
+async def approve_change(change_id: str, req: ApproveRequest, _: None = Depends(_require_api_key)) -> dict:
     client = await get_temporal_client(get_settings())
     workflow_id = f"change-{change_id}"
     handle = client.get_workflow_handle(workflow_id)
@@ -118,7 +151,9 @@ async def approve_change(change_id: str, req: ApproveRequest) -> dict:
 
 
 @app.get("/v1/changes/{change_id}/steps/{step_id}/prompt")
-async def get_step_prompt_endpoint(change_id: str, step_id: str) -> dict:
+async def get_step_prompt_endpoint(
+    change_id: str, step_id: str, _: None = Depends(_require_read_auth)
+) -> dict:
     """Get latest technician prompt for the step (from MOP agent)."""
     prompt = get_step_prompt(change_id, step_id)
     if prompt is None:
@@ -127,7 +162,9 @@ async def get_step_prompt_endpoint(change_id: str, step_id: str) -> dict:
 
 
 @app.get("/v1/changes/{change_id}/steps/{step_id}")
-async def get_step(change_id: str, step_id: str) -> dict:
+async def get_step(
+    change_id: str, step_id: str, _: None = Depends(_require_read_auth)
+) -> dict:
     result = get_latest_step_result(change_id, step_id)
     if not result:
         raise HTTPException(status_code=404, detail="Step result not found")
@@ -135,11 +172,27 @@ async def get_step(change_id: str, step_id: str) -> dict:
 
 
 @app.get("/v1/changes/{change_id}/proofpack")
-async def get_proofpack(change_id: str) -> dict:
+async def get_proofpack(
+    change_id: str, _: None = Depends(_require_read_auth)
+) -> dict:
     proofpack = load_proofpack(change_id)
     if not proofpack:
         raise HTTPException(status_code=404, detail="Proof pack not found")
     return proofpack.model_dump(mode="json")
+
+
+@app.get("/v1/evidence/{evidence_id}")
+async def get_evidence_url(evidence_id: str) -> dict:
+    """Return presigned URL for evidence (dev only, when using MinIO)."""
+    settings = get_settings()
+    store = get_evidence_store(settings)
+    if not isinstance(store, MinioEvidenceStore):
+        raise HTTPException(status_code=404, detail="Evidence URL only available with MinIO backend")
+    reg = read_evidence_registry(evidence_id)
+    if not reg or not reg.get("object_key"):
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    url = store.generate_presigned_url(reg["object_key"])
+    return {"evidence_id": evidence_id, "url": url, "expires_in": 3600}
 
 
 if __name__ == "__main__":

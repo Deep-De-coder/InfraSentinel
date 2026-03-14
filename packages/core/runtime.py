@@ -85,6 +85,37 @@ def save_step_prompt(change_id: str, step_id: str, tech_prompt: str) -> None:
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def _evidence_registry_path() -> Path:
+    return _runtime_dir() / "evidence_registry.json"
+
+
+def write_evidence_registry(evidence_id: str, data: dict) -> None:
+    """Store evidence metadata (sha256, uri, object_key) for MinIO uploads."""
+    path = _evidence_registry_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    reg: dict = {}
+    if path.exists():
+        reg = json.loads(path.read_text(encoding="utf-8"))
+    reg[evidence_id] = data
+    path.write_text(json.dumps(reg, indent=2), encoding="utf-8")
+
+
+def read_evidence_registry(evidence_id: str) -> dict | None:
+    """Read evidence metadata from registry."""
+    path = _evidence_registry_path()
+    if not path.exists():
+        return None
+    reg = json.loads(path.read_text(encoding="utf-8"))
+    return reg.get(evidence_id)
+
+
+def write_approved_mapping(change_id: str, data: dict) -> None:
+    """Write approved mapping for NetBox mode."""
+    path = _runtime_dir() / "approved_mappings"
+    path.mkdir(parents=True, exist_ok=True)
+    (path / f"{change_id}.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
 def get_step_prompt(change_id: str, step_id: str) -> str | None:
     """Get latest technician prompt for a step."""
     path = _step_prompts_path()

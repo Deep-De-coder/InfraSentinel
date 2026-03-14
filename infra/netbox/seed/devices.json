@@ -1,0 +1,14 @@
+[
+  {
+    "name": "PANEL-A",
+    "device_type": "patch-panel-24",
+    "site": "dc1",
+    "status": "active"
+  },
+  {
+    "name": "PP1",
+    "device_type": "patch-panel-24",
+    "site": "dc1",
+    "status": "active"
+  }
+]

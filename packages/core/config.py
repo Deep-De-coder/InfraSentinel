@@ -32,6 +32,11 @@ class Settings(BaseSettings):
 
     netbox_url: str = Field(default="http://localhost:8001", alias="NETBOX_URL")
     netbox_token: str = Field(default="", alias="NETBOX_TOKEN")
+    netbox_mode: str = Field(default="mock", alias="NETBOX_MODE")
+
+    infra_api_key: str | None = Field(default=None, alias="INFRA_API_KEY")
+    auth_reads: bool = Field(default=False, alias="AUTH_READS")
+    mcp_api_key: str | None = Field(default=None, alias="MCP_API_KEY")
     cv_mode: str = Field(default="mock", alias="CV_MODE")
     scenario: str = Field(default="CHG-001_A", alias="SCENARIO")
 
