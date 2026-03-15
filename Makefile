@@ -39,13 +39,19 @@ lint:
 typecheck:
 	$(UV) run mypy apps packages services a2a tests
 
-# Docker full stack (loads .env.mock if present for INFRA_API_KEY, etc.)
-ENV_FILE := $(if $(wildcard .env.mock),--env-file .env.mock,)
+# Docker full stack (uses infra/env/.env.mock; creates it from example if missing)
 docker-up:
-	$(COMPOSE) $(ENV_FILE) up -d --build
+	@$(PYTHON) scripts/dev/ensure_env_mock.py || true
+	$(COMPOSE) --env-file infra/env/.env.mock up -d --build
+	@echo ""
+	@echo "=== Key service URLs ==="
+	@echo "  API:           http://localhost:8080"
+	@echo "  Temporal UI:   http://localhost:8088"
+	@echo "  MinIO console: http://localhost:9001"
+	@echo ""
 
 docker-dev:
-	$(COMPOSE) $(ENV_FILE) --profile dev up -d --build
+	$(COMPOSE) --env-file infra/env/.env.mock --profile dev up -d --build
 
 docker-down:
 	$(COMPOSE) --profile dev down

@@ -13,6 +13,7 @@ Install these first so you can run mock mode:
 | **Docker Desktop** | Runs Temporal, Postgres, MinIO, NetBox |
 | **Python 3.11+** | API, worker, tests |
 | **Node.js** | Required later for promptfoo eval |
+| **jq** | Required for smoke test (JSON parsing) |
 | **uv** (recommended) | Fast Python dependency management |
 
 **Goal:** You should be able to run `make docker-up` and `make test` (pytest).
@@ -25,35 +26,26 @@ uv --version       # or: pip install uv
 uv sync --extra dev && make test   # run tests
 ```
 
-## Run in MOCK mode (no external keys, no accounts)
+## Run in mock mode (no external keys, no accounts)
 
-1. **Create your local env file:**
-
-```bash
-cp infra/env/.env.mock.example .env.mock
-```
-
-2. **Add your own keys** (any random strings):
+**Single command:**
 
 ```bash
-# Edit .env.mock and set:
-INFRA_API_KEY=your-random-string-here
-MCP_API_KEY=another-random-string-here
+bash scripts/dev/mock_quickstart.sh
 ```
 
-3. **Bring the stack up** (Temporal + Postgres + MinIO + API + Worker + mock MCP servers):
+This creates `infra/env/.env.mock` (with generated keys if missing), brings up the stack, and runs the smoke test.
+
+**Manual steps:**
 
 ```bash
 make docker-up
+bash scripts/smoke/run_smoke.sh
 ```
 
-4. **Run the smoke test:**
+`make docker-up` uses `infra/env/.env.mock` (create from `infra/env/.env.mock.example` if needed; the quickstart generates keys automatically). The smoke test requires **jq** (install: `brew install jq` / `apt install jq`).
 
-```bash
-./scripts/smoke/run_smoke.sh
-```
-
-On Windows, use Git Bash or WSL to run the shell script.
+On Windows, use Git Bash or WSL.
 
 **At this point you have a working system with:**
 - MOP step workflow
