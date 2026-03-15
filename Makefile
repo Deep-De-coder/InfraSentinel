@@ -39,12 +39,13 @@ lint:
 typecheck:
 	$(UV) run mypy apps packages services a2a tests
 
-# Docker full stack
+# Docker full stack (loads .env.mock if present for INFRA_API_KEY, etc.)
+ENV_FILE := $(if $(wildcard .env.mock),--env-file .env.mock,)
 docker-up:
-	$(COMPOSE) up -d --build
+	$(COMPOSE) $(ENV_FILE) up -d --build
 
 docker-dev:
-	$(COMPOSE) --profile dev up -d --build
+	$(COMPOSE) $(ENV_FILE) --profile dev up -d --build
 
 docker-down:
 	$(COMPOSE) --profile dev down

@@ -4,6 +4,65 @@ Production-grade, cloud-agnostic monorepo scaffold for durable MOP guidance and 
 
 InfraSentinel guides data-center technicians through change steps, verifies rack/port/cable correctness using evidence + CMDB truth, blocks on mismatch/low confidence, and produces auditable proof packs.
 
+## Prerequisites (no accounts needed)
+
+Install these first so you can run mock mode:
+
+| Tool | Purpose |
+|------|---------|
+| **Docker Desktop** | Runs Temporal, Postgres, MinIO, NetBox |
+| **Python 3.11+** | API, worker, tests |
+| **Node.js** | Required later for promptfoo eval |
+| **uv** (recommended) | Fast Python dependency management |
+
+**Goal:** You should be able to run `make docker-up` and `make test` (pytest).
+
+```bash
+# Verify
+docker compose version
+python --version   # 3.11+
+uv --version       # or: pip install uv
+uv sync --extra dev && make test   # run tests
+```
+
+## Run in MOCK mode (no external keys, no accounts)
+
+1. **Create your local env file:**
+
+```bash
+cp infra/env/.env.mock.example .env.mock
+```
+
+2. **Add your own keys** (any random strings):
+
+```bash
+# Edit .env.mock and set:
+INFRA_API_KEY=your-random-string-here
+MCP_API_KEY=another-random-string-here
+```
+
+3. **Bring the stack up** (Temporal + Postgres + MinIO + API + Worker + mock MCP servers):
+
+```bash
+make docker-up
+```
+
+4. **Run the smoke test:**
+
+```bash
+./scripts/smoke/run_smoke.sh
+```
+
+On Windows, use Git Bash or WSL to run the shell script.
+
+**At this point you have a working system with:**
+- MOP step workflow
+- Evidence upload
+- Mock CV + mock NetBox validation
+- Proofpack output
+
+---
+
 ## Architecture
 
 - **Temporal** = durable orchestrator (workflows, signals, activities).
