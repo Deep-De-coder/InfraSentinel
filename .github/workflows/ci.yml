@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-typecheck-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Mypy
+        run: uv run mypy apps packages services a2a tests || true
+
+      - name: Pytest
+        run: uv run pytest -q
+
+  promptfoo:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install promptfoo
+        run: npm install -g promptfoo
+
+      - name: Run promptfoo eval
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -n "$OPENAI_API_KEY" ]; then
+            npx promptfoo eval -c eval/promptfoo.yaml
+          else
+            echo "OPENAI_API_KEY not set, skipping promptfoo eval"
+          fi
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          tags: infrasentinel-api:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: false
+          tags: infrasentinel-worker:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build MCP images
+        run: |
+          docker build -f services/mcp_camera/Dockerfile -t mcp-camera:test .
+          docker build -f services/mcp_cv/Dockerfile -t mcp-cv:test .
+          docker build -f services/mcp_netbox/Dockerfile -t mcp-netbox:test .
+          docker build -f services/mcp_ticketing/Dockerfile -t mcp-ticketing:test .
+
+      - name: Build A2A agent images
+        run: |
+          docker build -f services/a2a_mop_agent/Dockerfile -t a2a-mop:test .
+          docker build -f services/a2a_vision_agent/Dockerfile -t a2a-vision:test .
+          docker build -f services/a2a_cmdb_agent/Dockerfile -t a2a-cmdb:test .

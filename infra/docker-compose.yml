@@ -1,3 +1,6 @@
+# InfraSentinel full stack. Default: mock mode. Profile dev: adds NetBox.
+# Usage: docker compose up -d (mock) | docker compose --profile dev up -d (dev)
+
 version: "3.9"
 
 services:
@@ -12,12 +15,18 @@ services:
       - "5433:5432"
     volumes:
       - temporal_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   temporal:
     image: temporalio/auto-setup:1.25.1
     container_name: temporal
     depends_on:
-      - temporal-postgres
+      temporal-postgres:
+        condition: service_healthy
     environment:
       DB: postgresql
       DB_PORT: 5432
@@ -49,6 +58,11 @@ services:
       - "5432:5432"
     volumes:
       - app_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infrasentinel -d infrasentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio:RELEASE.2025-01-20T14-49-07Z
@@ -62,41 +76,137 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: infrasentinel-api
+    depends_on:
+      app-postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      temporal:
+        condition: service_started
+    environment:
+      - INFRASENTINEL_MODE=${INFRASENTINEL_MODE:-mock}
+      - TEMPORAL_ADDRESS=temporal:7233
+      - DATABASE_URL=postgresql+asyncpg://infrasentinel:infrasentinel@app-postgres:5432/infrasentinel
+      - EVIDENCE_BACKEND=${EVIDENCE_BACKEND:-local}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minio
+      - MINIO_SECRET_KEY=minio123
+      - MINIO_BUCKET=infrasentinel-evidence
+      - LOCAL_EVIDENCE_DIR=/app/.data/evidence
+      - INFRA_API_KEY=${INFRA_API_KEY:-}
+      - AUTH_READS=${AUTH_READS:-false}
+    ports:
+      - "8080:8080"
+    volumes:
+      - api_data:/app/.data
+      - ../runtime:/app/runtime
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    container_name: infrasentinel-worker
+    depends_on:
+      temporal:
+        condition: service_started
+      app-postgres:
+        condition: service_healthy
+    environment:
+      - INFRASENTINEL_MODE=${INFRASENTINEL_MODE:-mock}
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_TASK_QUEUE=infrasentinel-task-queue
+      - DATABASE_URL=postgresql+asyncpg://infrasentinel:infrasentinel@app-postgres:5432/infrasentinel
+      - SCENARIO=${SCENARIO:-CHG-001_A}
+      - NETBOX_MODE=${NETBOX_MODE:-mock}
+      - NETBOX_URL=${NETBOX_URL:-http://netbox:8080}
+      - NETBOX_TOKEN=${NETBOX_TOKEN:-}
+      - LOCAL_EVIDENCE_DIR=/app/.data/evidence
+      - A2A_MODE=${A2A_MODE:-off}
+      - A2A_MOP_URL=http://a2a-mop-agent:8091
+      - A2A_VISION_URL=http://a2a-vision-agent:8092
+      - A2A_CMDB_URL=http://a2a-cmdb-agent:8093
+    volumes:
+      - worker_data:/app/.data
+      - ../runtime:/app/runtime
+
+  mcp-camera:
+    build:
+      context: ..
+      dockerfile: services/mcp_camera/Dockerfile
+    container_name: mcp-camera
+    stdin_open: true
+    tty: true
+
+  mcp-cv:
+    build:
+      context: ..
+      dockerfile: services/mcp_cv/Dockerfile
+    container_name: mcp-cv
+    stdin_open: true
+    tty: true
+
+  mcp-netbox:
+    build:
+      context: ..
+      dockerfile: services/mcp_netbox/Dockerfile
+    container_name: mcp-netbox
+    environment:
+      - NETBOX_MODE=${NETBOX_MODE:-mock}
+      - NETBOX_URL=${NETBOX_URL:-http://netbox:8080}
+      - NETBOX_TOKEN=${NETBOX_TOKEN:-}
+    stdin_open: true
+    tty: true
+
+  mcp-ticketing:
+    build:
+      context: ..
+      dockerfile: services/mcp_ticketing/Dockerfile
+    container_name: mcp-ticketing
+    stdin_open: true
+    tty: true
 
   a2a-mop-agent:
     build:
       context: ..
-      dockerfile: infra/Dockerfile.agent
+      dockerfile: services/a2a_mop_agent/Dockerfile
     container_name: a2a-mop-agent
-    command: ["python", "-m", "uvicorn", "services.a2a_mop_agent.server:app", "--host", "0.0.0.0", "--port", "8091"]
     ports:
       - "8091:8091"
     environment:
-      - A2A_MODE=off
+      - A2A_MODE=${A2A_MODE:-off}
 
   a2a-vision-agent:
     build:
       context: ..
-      dockerfile: infra/Dockerfile.agent
+      dockerfile: services/a2a_vision_agent/Dockerfile
     container_name: a2a-vision-agent
-    command: ["python", "-m", "uvicorn", "services.a2a_vision_agent.server:app", "--host", "0.0.0.0", "--port", "8092"]
     ports:
       - "8092:8092"
     environment:
-      - A2A_MODE=off
+      - A2A_MODE=${A2A_MODE:-off}
 
   a2a-cmdb-agent:
     build:
       context: ..
-      dockerfile: infra/Dockerfile.agent
+      dockerfile: services/a2a_cmdb_agent/Dockerfile
     container_name: a2a-cmdb-agent
-    command: ["python", "-m", "uvicorn", "services.a2a_cmdb_agent.server:app", "--host", "0.0.0.0", "--port", "8093"]
     ports:
       - "8093:8093"
     environment:
-      - A2A_MODE=off
+      - A2A_MODE=${A2A_MODE:-off}
 
-  # NetBox dev profile
+  # Dev profile: NetBox
   netbox-postgres:
     image: postgres:15-alpine
     container_name: netbox-postgres
@@ -165,3 +275,5 @@ volumes:
   app_postgres_data:
   minio_data:
   netbox_postgres_data:
+  api_data:
+  worker_data:

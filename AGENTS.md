@@ -28,6 +28,14 @@ Guidance for coding agents working in this repository.
 - Type check: `uv run mypy apps packages services a2a tests`
 - Test: `uv run pytest -q`
 
+## Docker
+
+- `make docker-up` — bring up full stack (mock mode): Temporal, Postgres, MinIO, API, Worker, MCP servers, A2A agents
+- `make docker-dev` — add NetBox profile (netbox, redis, postgres-netbox)
+- `make docker-down` — stop all services
+- `make logs` — tail logs
+- `make seed-netbox` — seed NetBox with sample data (run after `docker-dev`)
+
 ## Tests
 
 - For each new tool handler, add a unit test in `tests/`.

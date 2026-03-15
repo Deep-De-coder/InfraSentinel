@@ -1,10 +1,12 @@
 PYTHON ?= python
 UV ?= uv
+COMPOSE ?= docker compose -f infra/docker-compose.yml
 
 .PHONY: up dev mcp test eval lint typecheck data-help synth cv-test
+.PHONY: docker-up docker-dev docker-down logs seed-netbox
 
 up:
-	docker compose -f infra/docker-compose.yml up -d
+	$(COMPOSE) up -d
 
 dev:
 	$(UV) run python -m apps.api.main & $(UV) run python -m apps.worker.main
@@ -36,3 +38,19 @@ lint:
 
 typecheck:
 	$(UV) run mypy apps packages services a2a tests
+
+# Docker full stack
+docker-up:
+	$(COMPOSE) up -d --build
+
+docker-dev:
+	$(COMPOSE) --profile dev up -d --build
+
+docker-down:
+	$(COMPOSE) --profile dev down
+
+logs:
+	$(COMPOSE) logs -f
+
+seed-netbox:
+	NETBOX_URL=$${NETBOX_URL:-http://localhost:8001} NETBOX_TOKEN=$${NETBOX_TOKEN} python infra/netbox/seed_netbox.py
