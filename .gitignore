@@ -6,5 +6,8 @@ __pycache__/
 .data/
 runtime/
 infra/env/.env.mock
+infra/env/.env.dev
+infra/env/.env
 .env.mock
+.env
 *.pyc

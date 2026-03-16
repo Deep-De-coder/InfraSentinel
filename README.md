@@ -55,6 +55,51 @@ On Windows, use Git Bash or WSL.
 
 ---
 
+---
+
+## Run with Claude (dev)
+
+Requires an [Anthropic API key](https://console.anthropic.com/) with active credits.
+
+**Single command (interactive — prompts for your API key):**
+
+```bash
+bash scripts/dev/dev_quickstart_claude.sh
+```
+
+This will:
+1. Create `infra/env/.env.dev` from the example (prompts for `ANTHROPIC_API_KEY`; auto-generates `INFRA_API_KEY` and `MCP_API_KEY`).
+2. Verify Claude is reachable (`claude-3-5-sonnet-latest`, 1-token ping).
+3. Start the full stack with the dev env file (`make docker-up-dev`).
+4. Run the smoke test (CHG-001_A, same as mock mode).
+5. Check worker logs to confirm `LLM_PROVIDER=anthropic` was active.
+
+**Manual steps:**
+
+```bash
+# 1. Create/update infra/env/.env.dev
+bash scripts/dev/create_env_dev.sh
+
+# 2. Test Claude connectivity
+bash scripts/dev/test_claude.sh
+
+# 3. Start stack (Claude-enabled)
+make docker-up-dev
+# or: bash scripts/dev/up_dev.sh
+
+# 4. Smoke test
+bash scripts/smoke/run_smoke.sh
+
+# 5. Check Claude was used
+bash scripts/dev/verify_claude_used.sh
+```
+
+`infra/env/.env.dev` is git-ignored and never committed.
+
+Mock mode is unchanged and still runs with `bash scripts/dev/mock_quickstart.sh` / `make docker-up`.
+
+---
+
 ## Architecture
 
 - **Temporal** = durable orchestrator (workflows, signals, activities).

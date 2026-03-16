@@ -2,8 +2,8 @@ PYTHON ?= python
 UV ?= uv
 COMPOSE ?= docker compose -f infra/docker-compose.yml
 
-.PHONY: up dev mcp test eval lint typecheck data-help synth cv-test
-.PHONY: docker-up docker-dev docker-down logs seed-netbox
+.PHONY: up dev mcp test eval lint typecheck data-help synth cv-test test-claude
+.PHONY: docker-up docker-up-dev docker-dev docker-down logs seed-netbox
 
 up:
 	$(COMPOSE) up -d
@@ -33,6 +33,9 @@ synth:
 cv-test:
 	$(UV) run pytest -q tests/test_cv_parsing.py tests/test_cv_quality.py tests/test_mcp_cv_tools.py
 
+test-claude:
+	$(UV) run python scripts/dev/test_claude.py
+
 lint:
 	$(UV) run ruff check .
 
@@ -43,6 +46,15 @@ typecheck:
 docker-up:
 	@$(PYTHON) scripts/dev/ensure_env_mock.py || true
 	$(COMPOSE) --env-file infra/env/.env.mock up -d --build
+	@echo ""
+	@echo "=== Key service URLs ==="
+	@echo "  API:           http://localhost:8080"
+	@echo "  Temporal UI:   http://localhost:8088"
+	@echo "  MinIO console: http://localhost:9001"
+	@echo ""
+
+docker-up-dev:
+	$(COMPOSE) --env-file infra/env/.env.dev up -d --build
 	@echo ""
 	@echo "=== Key service URLs ==="
 	@echo "  API:           http://localhost:8080"

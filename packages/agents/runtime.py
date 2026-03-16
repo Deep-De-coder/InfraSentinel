@@ -13,5 +13,5 @@ class AgentRuntime:
 
 def build_agent_runtime(settings: Settings) -> AgentRuntime:
     if settings.anthropic_api_key:
-        return AgentRuntime(provider="anthropic", model_name="claude-3-5-sonnet-latest")
+        return AgentRuntime(provider="anthropic", model_name="claude-sonnet-4-6")
     return AgentRuntime(provider="mock", model_name="deterministic-mock")

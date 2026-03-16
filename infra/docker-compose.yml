@@ -100,6 +100,9 @@ services:
       - LOCAL_EVIDENCE_DIR=/app/.data/evidence
       - INFRA_API_KEY=${INFRA_API_KEY:-}
       - AUTH_READS=${AUTH_READS:-false}
+      - LLM_PROVIDER=${LLM_PROVIDER:-mock}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
     ports:
       - "8080:8080"
     volumes:
@@ -136,6 +139,9 @@ services:
       - A2A_MOP_URL=http://a2a-mop-agent:8091
       - A2A_VISION_URL=http://a2a-vision-agent:8092
       - A2A_CMDB_URL=http://a2a-cmdb-agent:8093
+      - LLM_PROVIDER=${LLM_PROVIDER:-mock}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
     volumes:
       - worker_data:/app/.data
       - ../runtime:/app/runtime
