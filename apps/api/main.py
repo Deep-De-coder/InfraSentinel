@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from temporalio.client import Client
-from temporalio.exceptions import WorkflowAlreadyStartedError
+from temporalio.exceptions import TemporalError, WorkflowAlreadyStartedError
 
 from apps.api.deps import get_db_session_factory, get_evidence_store, get_temporal_client
 from apps.api.schemas import (
@@ -144,7 +144,24 @@ async def upload_evidence(
     client: Client = await get_temporal_client(settings)
     workflow_id = f"change-{change_id}"
     handle = client.get_workflow_handle(workflow_id)
-    await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, step_id, out_id)
+    try:
+        await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, args=[step_id, out_id])
+    except TemporalError as e:
+        msg = str(e).lower()
+        if "not found" in msg or "unknown" in msg or "does not exist" in msg or "workflow execution" in msg:
+            raise HTTPException(
+                status_code=404,
+                detail="Change not started. Call POST /v1/changes/start first.",
+            ) from e
+        raise
+    except Exception as e:
+        msg = str(e).lower()
+        if "not found" in msg or "unknown" in msg or "does not exist" in msg:
+            raise HTTPException(
+                status_code=404,
+                detail="Change not started. Call POST /v1/changes/start first.",
+            ) from e
+        raise
     return {"evidence_id": out_id, "status": "verifying", "message": "Evidence received. Verifying..."}
 
 
@@ -153,7 +170,7 @@ async def approve_change(change_id: str, req: ApproveRequest, _: None = Depends(
     client = await get_temporal_client(get_settings())
     workflow_id = f"change-{change_id}"
     handle = client.get_workflow_handle(workflow_id)
-    await handle.signal(ChangeExecutionWorkflow.approval_granted, req.step_id, req.approver)
+    await handle.signal(ChangeExecutionWorkflow.approval_granted, args=[req.step_id, req.approver])
     return {"ok": True, "change_id": change_id, "step_id": req.step_id}
 
 

@@ -71,7 +71,7 @@ async def test_quality_gate_blocks_bad_then_passes(ensure_sample_images) -> None
             )
 
             # S1: EVID-002-BADQUALITY (blurry) => should fail quality gate, NEEDS_RETAKE
-            await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, "S1", "EVID-002-BADQUALITY")
+            await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, args=["S1", "EVID-002-BADQUALITY"])
             await asyncio.sleep(0.5)
 
             # Check proofpack: S1 should be NEEDS_RETAKE with quality_gate tool_call, no CV
@@ -90,12 +90,12 @@ async def test_quality_gate_blocks_bad_then_passes(ensure_sample_images) -> None
             assert len(cv_like) == 0
 
             # S1: EVID-001 (good) => quality passes, CV runs, VERIFIED
-            await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, "S1", "EVID-001")
+            await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, args=["S1", "EVID-001"])
             await asyncio.sleep(0.5)
 
             # S2: no evidence required (action step)
             # S3: EVID-003 (good)
-            await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, "S3", "EVID-003")
+            await handle.signal(ChangeExecutionWorkflow.evidence_uploaded, args=["S3", "EVID-003"])
 
             result = await handle.result()
             assert result["change_id"] == "CHG-QG"
