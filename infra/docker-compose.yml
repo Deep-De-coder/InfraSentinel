@@ -1,8 +1,6 @@
 # InfraSentinel full stack. Default: mock mode. Profile dev: adds NetBox.
 # Usage: docker compose up -d (mock) | docker compose --profile dev up -d (dev)
 
-version: "3.9"
-
 services:
   temporal-postgres:
     image: postgres:15
@@ -28,7 +26,7 @@ services:
       temporal-postgres:
         condition: service_healthy
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
       POSTGRES_PWD: temporal
@@ -231,6 +229,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   netbox-redis:
     image: redis:7-alpine
@@ -242,6 +241,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+      start_period: 5s
 
   netbox:
     image: netboxcommunity/netbox:latest
@@ -254,15 +254,22 @@ services:
       netbox-redis:
         condition: service_healthy
     environment:
+      # DB: use Docker service DNS (netbox-postgres:5432), NOT localhost or host port 5434
       DB_HOST: netbox-postgres
       DB_PORT: "5432"
       DB_NAME: netbox
       DB_USER: netbox
       DB_PASSWORD: netbox
+      # Wait up to 120s for DB (entrypoint default is 30s)
+      MAX_DB_WAIT_TIME: 120
+      DB_WAIT_TIMEOUT: 3
+      # Redis (no password for redis:7-alpine)
       REDIS_HOST: netbox-redis
       REDIS_PORT: "6379"
       REDIS_CACHE_HOST: netbox-redis
       REDIS_CACHE_PORT: "6379"
+      # NetBox required (SECRET_KEY must be >= 50 chars; Django fails before DB if missing)
+      SECRET_KEY: "django-insecure-dev-key-change-in-prod-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       SUPERUSER_NAME: admin
       SUPERUSER_EMAIL: admin@example.com
       SUPERUSER_PASSWORD: admin
@@ -271,10 +278,14 @@ services:
       - "8001:8080"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/login/"]
-      start_period: 90s
+      start_period: 120s
       interval: 15s
       timeout: 5s
       retries: 5
+
+networks:
+  default:
+    name: infrasentinel
 
 volumes:
   temporal_postgres_data:

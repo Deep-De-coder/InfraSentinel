@@ -72,4 +72,4 @@ logs:
 	$(COMPOSE) logs -f
 
 seed-netbox:
-	NETBOX_URL=$${NETBOX_URL:-http://localhost:8001} NETBOX_TOKEN=$${NETBOX_TOKEN} python infra/netbox/seed_netbox.py
+	NETBOX_URL=$${NETBOX_URL:-http://localhost:8001} NETBOX_TOKEN=$${NETBOX_TOKEN} $(UV) run python infra/netbox/seed_netbox.py

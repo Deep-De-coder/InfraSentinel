@@ -20,6 +20,7 @@ from apps.worker.activities_execution import (
     activity_get_mop_prompt,
     activity_load_change,
     activity_persist_step_and_proofpack,
+    activity_quality_gate,
     activity_request_approval,
     activity_set_scenario,
     activity_vision_advice,

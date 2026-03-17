@@ -28,7 +28,7 @@ done
 echo "=== Seeding NetBox ==="
 # Create API token first via NetBox UI or use superuser for seed
 # For automation, we use the seed script (may need NETBOX_TOKEN from env)
-python infra/netbox/seed_netbox.py || true
+uv run python infra/netbox/seed_netbox.py || true
 
 echo "=== Creating approved mapping for CHG-DEV-001 ==="
 mkdir -p runtime/approved_mappings

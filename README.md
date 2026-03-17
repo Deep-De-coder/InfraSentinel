@@ -351,6 +351,27 @@ make mcp
 ./scripts/smoke/netbox_demo.sh
 ```
 
+**Windows PowerShell — Step 4 (start change):**
+
+```powershell
+$env:INFRA_API_KEY = "your-key-from-env-dev"
+uv run python -c "import httpx; r=httpx.post('http://127.0.0.1:8080/v1/changes/start', json={'change_id':'CHG-001','scenario':'CHG-001_A'}, headers={'X-INFRA-KEY':$env:INFRA_API_KEY}); print('status:', r.status_code); print(r.text); r.raise_for_status()"
+```
+
+**Windows PowerShell — Step 5 (run dev smoke test):**
+
+```powershell
+# Requires: Git Bash or WSL (bash), uv, INFRA_API_KEY in infra/env/.env.dev
+bash scripts/smoke/run_dev_smoke.sh
+```
+
+**NetBox troubleshooting:** If NetBox was previously started with different DB creds or keeps crashing with "Waiting on DB…", reset volumes and restart:
+
+```bash
+docker compose -f infra/docker-compose.yml --profile dev down -v
+docker compose -f infra/docker-compose.yml --profile dev up -d --build
+```
+
 ## Scenario Fixtures
 
 - **CHG-001_A**: Happy path, all evidence IDs match expected mapping.

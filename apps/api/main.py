@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from temporalio.client import Client
+from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from apps.api.deps import get_db_session_factory, get_evidence_store, get_temporal_client
 from apps.api.schemas import (
@@ -68,12 +69,18 @@ async def start_change(req: StartChangeRequest, _: None = Depends(_require_api_k
     client = await get_temporal_client(settings)
     workflow_id = f"change-{req.change_id}"
     scenario = req.scenario or settings.scenario or "CHG-001_A"
-    handle = await client.start_workflow(
-        ChangeExecutionWorkflow.run,
-        WorkflowInput(change_id=req.change_id, scenario=scenario),
-        id=workflow_id,
-        task_queue=settings.temporal_task_queue,
-    )
+    try:
+        handle = await client.start_workflow(
+            ChangeExecutionWorkflow.run,
+            WorkflowInput(change_id=req.change_id, scenario=scenario),
+            id=workflow_id,
+            task_queue=settings.temporal_task_queue,
+        )
+    except WorkflowAlreadyStartedError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Change {req.change_id} already started. Run 'docker compose -f infra/docker-compose.yml --profile dev down' to reset, or use a different change_id.",
+        )
     return StartChangeResponse(workflow_id=workflow_id, run_id=handle.result_run_id or "")
 
 

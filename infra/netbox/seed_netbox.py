@@ -53,7 +53,17 @@ def main() -> int:
         print("Could not get site dc1", file=sys.stderr)
         return 1
 
-    # 2. Manufacturer + Device type
+    # 2. Device role (required in NetBox v4+)
+    role = _get_or_create("dcim/device-roles/", {"name": "Server", "slug": "server"})
+    role_id = role.get("id") if isinstance(role, dict) else None
+    if not role_id:
+        role_resp = _get("dcim/device-roles/?slug=server")
+        role_id = role_resp["results"][0]["id"] if role_resp.get("results") else None
+    if not role_id:
+        print("Could not get device role", file=sys.stderr)
+        return 1
+
+    # 3. Manufacturer + Device type
     mfr = _get_or_create("dcim/manufacturers/", {"name": "Generic", "slug": "generic"})
     mfr_id = mfr.get("id") if isinstance(mfr, dict) else None
     dt = _get_or_create("dcim/device-types/", {
@@ -66,7 +76,7 @@ def main() -> int:
         dt_resp = _get("dcim/device-types/?slug=patch-panel-24")
         dt_id = dt_resp["results"][0]["id"] if dt_resp.get("results") else None
 
-    # 3. Front port template
+    # 4. Front port template
     _get_or_create("dcim/front-port-templates/", {
         "device_type": dt_id,
         "name": "p24",
@@ -83,16 +93,18 @@ def main() -> int:
         "type": "8p8c",
     }, lookup_key="name")
 
-    # 4. Devices
+    # 5. Devices
     dev_a = _get_or_create("dcim/devices/", {
         "name": "PANEL-A",
         "device_type": dt_id,
+        "role": role_id,
         "site": site_id,
         "status": "active",
     })
     dev_pp1 = _get_or_create("dcim/devices/", {
         "name": "PP1",
         "device_type": dt_id,
+        "role": role_id,
         "site": site_id,
         "status": "active",
     })
@@ -105,7 +117,7 @@ def main() -> int:
         dev_resp = _get("dcim/devices/?name=PP1")
         dev_pp1_id = dev_resp["results"][0]["id"] if dev_resp.get("results") else None
 
-    # 5. Front ports (create if not exist)
+    # 6. Front ports (create if not exist)
     for dev_id, dev_name, port_name in [(dev_a_id, "PANEL-A", "24"), (dev_pp1_id, "PP1", "P24"), (dev_pp1_id, "PP1", "P12"), (dev_pp1_id, "PP1", "P23")]:
         if not dev_id:
             continue
@@ -117,7 +129,7 @@ def main() -> int:
                 "type": "8p8c",
             })
 
-    # 6. Get front port IDs and create cable with label
+    # 7. Get front port IDs and create cable with label
     ports_a = _get("dcim/front-ports/?device_id=" + str(dev_a_id))
     port_a_24 = next((p for p in ports_a.get("results", []) if p.get("name") == "24"), None)
     ports_pp1 = _get("dcim/front-ports/?device_id=" + str(dev_pp1_id))
