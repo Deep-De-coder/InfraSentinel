@@ -52,12 +52,21 @@ class Settings(BaseSettings):
     a2a_cmdb_url: str = Field(default="http://localhost:8093", alias="A2A_CMDB_URL")
 
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    anthropic_model: str = Field(default="claude-3-5-haiku-20241022", alias="ANTHROPIC_MODEL")
+
     langfuse_public_key: str | None = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
     langfuse_secret_key: str | None = Field(default=None, alias="LANGFUSE_SECRET_KEY")
-    langfuse_host: str | None = Field(default=None, alias="LANGFUSE_HOST")
+    langfuse_host: str = Field(default="https://cloud.langfuse.com", alias="LANGFUSE_HOST")
+
     otel_exporter_otlp_endpoint: str | None = Field(
         default=None, alias="OTEL_EXPORTER_OTLP_ENDPOINT"
     )
+
+    kafka_bootstrap_servers: str = Field(default="localhost:9092", alias="KAFKA_BOOTSTRAP_SERVERS")
+
+    llm_hard_fail: bool = Field(default=False, alias="LLM_HARD_FAIL")
+
+    infra_mcp_transport: str = Field(default="in-process", alias="INFRA_MCP_TRANSPORT")
 
 
 @lru_cache

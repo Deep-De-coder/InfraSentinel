@@ -17,6 +17,7 @@ from apps.api.schemas import (
 )
 from apps.worker.workflows.change_execution_workflow import ChangeExecutionWorkflow, WorkflowInput
 from packages.core.config import get_settings
+from packages.core.kafka import KafkaEventBus, set_kafka_bus, get_kafka_bus, INFRASENTINEL_TOPICS
 from packages.core.observability import configure_observability
 from packages.core.runtime import (
     get_latest_step_result,
@@ -57,10 +58,40 @@ async def startup() -> None:
     configure_observability(settings)
     await get_db_session_factory(settings)
 
+    kafka_bus = KafkaEventBus(settings.kafka_bootstrap_servers)
+    await kafka_bus.connect()
+    set_kafka_bus(kafka_bus)
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    bus = get_kafka_bus()
+    if bus is not None:
+        await bus.disconnect()
+
 
 @app.get("/healthz")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> dict:
+    settings = get_settings()
+    bus = get_kafka_bus()
+    return {
+        "status": "ok",
+        "otlp_configured": settings.otel_exporter_otlp_endpoint is not None,
+        "langfuse_configured": bool(
+            settings.langfuse_public_key and settings.langfuse_secret_key
+        ),
+        "kafka_connected": bus.is_connected if bus is not None else False,
+    }
+
+
+@app.get("/api/v1/events/health")
+async def events_health() -> dict:
+    """Report Kafka connectivity and topic list."""
+    bus = get_kafka_bus()
+    return {
+        "kafka_connected": bus.is_connected if bus is not None else False,
+        "topics": INFRASENTINEL_TOPICS,
+    }
 
 
 @app.post("/v1/changes/start", response_model=StartChangeResponse)

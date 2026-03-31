@@ -15,8 +15,12 @@ ToolFn = Callable[..., Awaitable[Any]]
 class MCPToolRouter:
     """Minimal MCP client wrapper abstraction.
 
-    In mock mode we inject direct async callables from service handlers.
-    Production stdio/http transport wiring can evolve behind this contract.
+    In mock/in-process mode we inject direct async callables from service handlers
+    or adapter instances.  Remote MCP transport (stdio/HTTP) can evolve behind this
+    contract without changing callers.
+
+    Use MCPToolRouter.from_settings() to build from app settings.
+    Use MCPToolRouter.from_adapters(...) to build from explicit adapter instances.
     """
 
     camera_capture_frame: ToolFn
@@ -28,6 +32,8 @@ class MCPToolRouter:
     ticketing_get_change: ToolFn
     ticketing_post_step_result: ToolFn
     ticketing_request_approval: ToolFn
+
+    # --- convenience passthrough methods ---
 
     async def capture_frame(self, source: str) -> EvidenceRef:
         return await self.camera_capture_frame(source=source)
@@ -95,4 +101,60 @@ class MCPToolRouter:
             step_id=step_id,
             reason=reason,
             evidence_ids=evidence_ids,
+        )
+
+    # --- factories ---
+
+    @classmethod
+    def from_adapters(
+        cls,
+        camera_adapter: Any,
+        cv_adapter: Any,
+        netbox_adapter: Any,
+        ticketing_adapter: Any,
+    ) -> "MCPToolRouter":
+        """Build a router from adapter instances.
+
+        Each adapter exposes MCPToolRouter-compatible async methods that delegate
+        to the appropriate mock or real backend.
+        """
+        return cls(
+            camera_capture_frame=camera_adapter.capture_frame,
+            camera_store_evidence=camera_adapter.store_evidence,
+            cv_read_port_label=cv_adapter.read_port_label,
+            cv_read_cable_tag=cv_adapter.read_cable_tag,
+            netbox_get_expected_mapping=netbox_adapter.get_expected_mapping,
+            netbox_validate_observed=netbox_adapter.validate_observed,
+            ticketing_get_change=ticketing_adapter.get_change,
+            ticketing_post_step_result=ticketing_adapter.post_step_result,
+            ticketing_request_approval=ticketing_adapter.request_approval,
+        )
+
+    @classmethod
+    def from_settings(cls) -> "MCPToolRouter":
+        """Build a router from application settings.
+
+        INFRA_MCP_TRANSPORT=in-process (default) → adapters called directly in-process.
+        Remote transports (stdio/HTTP) are future work.
+        """
+        from packages.core.config import get_settings
+        from services.mcp_camera.adapter import CameraAdapter
+        from services.mcp_cv.adapter import CVAdapter
+        from services.mcp_netbox.adapter import NetBoxAdapter
+        from services.mcp_ticketing.adapter import TicketingAdapter
+
+        settings = get_settings()
+        transport = settings.infra_mcp_transport.lower()
+
+        if transport == "in-process":
+            return cls.from_adapters(
+                camera_adapter=CameraAdapter(),
+                cv_adapter=CVAdapter(cv_mode=settings.cv_mode, scenario=settings.scenario),
+                netbox_adapter=NetBoxAdapter(netbox_mode=settings.netbox_mode),
+                ticketing_adapter=TicketingAdapter(),
+            )
+
+        raise ValueError(
+            f"Unsupported INFRA_MCP_TRANSPORT={transport!r}. "
+            "Only 'in-process' is currently supported."
         )

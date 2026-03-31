@@ -2,6 +2,50 @@
 # Usage: docker compose up -d (mock) | docker compose --profile dev up -d (dev)
 
 services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    ports:
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic infrasentinel.change.started --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic infrasentinel.step.completed --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic infrasentinel.quality.failed --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic infrasentinel.cmdb.mismatch --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic infrasentinel.proofpack.ready --partitions 1 --replication-factor 1
+        echo "All topics created."
+    restart: "no"
+
+
   temporal-postgres:
     image: postgres:15
     container_name: temporal-postgres
@@ -86,6 +130,8 @@ services:
         condition: service_started
       temporal:
         condition: service_started
+      kafka:
+        condition: service_healthy
     environment:
       - INFRASENTINEL_MODE=${INFRASENTINEL_MODE:-mock}
       - TEMPORAL_ADDRESS=temporal:7233
@@ -101,6 +147,10 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-mock}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
     ports:
       - "8080:8080"
     volumes:
@@ -123,6 +173,8 @@ services:
         condition: service_started
       app-postgres:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       - INFRASENTINEL_MODE=${INFRASENTINEL_MODE:-mock}
       - TEMPORAL_ADDRESS=temporal:7233
@@ -140,6 +192,10 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-mock}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
     volumes:
       - worker_data:/app/.data
       - ../runtime:/app/runtime

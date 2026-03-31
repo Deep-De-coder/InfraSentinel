@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
+from opentelemetry import trace
 from temporalio import activity
 
 from packages.a2a.client import A2AClient
@@ -37,12 +38,48 @@ _cv_handlers: CVHandlers | None = None
 _netbox_handlers: NetboxHandlers | None = None
 _ticketing_handlers: TicketingHandlers | None = None
 
+_tracer = trace.get_tracer(__name__)
+
 
 def configure_handlers(cv: CVHandlers, netbox: NetboxHandlers, ticketing: TicketingHandlers) -> None:
     global _cv_handlers, _netbox_handlers, _ticketing_handlers
     _cv_handlers = cv
     _netbox_handlers = netbox
     _ticketing_handlers = ticketing
+
+
+async def _kafka_publish(topic: str, event: dict) -> None:
+    """Fire-and-forget Kafka publish. Never raises."""
+    try:
+        from packages.core.kafka import get_kafka_bus
+
+        bus = get_kafka_bus()
+        if bus is not None:
+            await bus.publish(topic, event)
+    except Exception:
+        pass
+
+
+@activity.defn
+async def activity_set_scenario(change_id: str, scenario: str) -> None:
+    set_scenario_config(change_id, scenario)
+    settings = get_settings()
+    if settings.netbox_mode == "netbox":
+        mapping = load_expected_mapping(change_id)
+        write_approved_mapping(change_id, mapping)
+
+    try:
+        from packages.core.events import ChangeStartedEvent
+
+        ev = ChangeStartedEvent(
+            change_id=change_id,
+            mop_id=scenario,
+            technician_id="unknown",
+            correlation_id=change_id,
+        )
+        await _kafka_publish("infrasentinel.change.started", ev.model_dump(mode="json"))
+    except Exception:
+        pass
 
 
 @activity.defn
@@ -74,33 +111,56 @@ async def activity_quality_gate(
             "guidance": ["Invalid image; please upload a valid photo."],
             "tool_call": {"tool": "quality_gate", "error": "decode_failed", "decision": "needs_retake"},
         }
-    metrics = compute_image_quality(
-        img,
-        blur_min=settings.blur_min,
-        brightness_min=settings.brightness_min,
-        glare_max=settings.glare_max,
-        min_w=settings.min_width,
-        min_h=settings.min_height,
-    )
-    fail = metrics.is_too_blurry or metrics.is_too_dark or metrics.is_too_glary or metrics.is_low_res
-    if fail:
-        guidance = retake_guidance(metrics)
-        return {
-            "pass": False,
-            "metrics": metrics.model_dump(),
-            "guidance": guidance,
-            "tool_call": {
-                "tool": "quality_gate",
+
+    with _tracer.start_as_current_span("quality_gate") as span:
+        metrics = compute_image_quality(
+            img,
+            blur_min=settings.blur_min,
+            brightness_min=settings.brightness_min,
+            glare_max=settings.glare_max,
+            min_w=settings.min_width,
+            min_h=settings.min_height,
+        )
+        span.set_attribute("quality.blur_score", metrics.blur_score)
+        span.set_attribute("quality.brightness", metrics.brightness)
+        span.set_attribute("quality.glare_score", metrics.glare_score)
+        span.set_attribute("quality.is_too_blurry", metrics.is_too_blurry)
+        span.set_attribute("quality.is_too_dark", metrics.is_too_dark)
+        span.set_attribute("quality.is_too_glary", metrics.is_too_glary)
+        span.set_attribute("quality.is_low_res", metrics.is_low_res)
+
+        fail = metrics.is_too_blurry or metrics.is_too_dark or metrics.is_too_glary or metrics.is_low_res
+        if fail:
+            guidance = retake_guidance(metrics)
+            try:
+                from packages.core.events import QualityFailedEvent
+
+                ev = QualityFailedEvent(
+                    change_id=change_id,
+                    step_id=step_id,
+                    reason="Image quality below threshold",
+                    metrics=metrics.model_dump(),
+                    correlation_id=change_id,
+                )
+                await _kafka_publish("infrasentinel.quality.failed", ev.model_dump(mode="json"))
+            except Exception:
+                pass
+            return {
+                "pass": False,
                 "metrics": metrics.model_dump(),
-                "decision": "needs_retake",
-            },
+                "guidance": guidance,
+                "tool_call": {
+                    "tool": "quality_gate",
+                    "metrics": metrics.model_dump(),
+                    "decision": "needs_retake",
+                },
+            }
+        return {
+            "pass": True,
+            "metrics": metrics.model_dump(),
+            "guidance": [],
+            "tool_call": {"tool": "quality_gate", "metrics": metrics.model_dump(), "decision": "pass"},
         }
-    return {
-        "pass": True,
-        "metrics": metrics.model_dump(),
-        "guidance": [],
-        "tool_call": {"tool": "quality_gate", "metrics": metrics.model_dump(), "decision": "pass"},
-    }
 
 
 @activity.defn
@@ -181,21 +241,19 @@ async def activity_load_change(change_id: str) -> dict:
 
 
 @activity.defn
-async def activity_set_scenario(change_id: str, scenario: str) -> None:
-    set_scenario_config(change_id, scenario)
-    settings = get_settings()
-    if settings.netbox_mode == "netbox":
-        mapping = load_expected_mapping(change_id)
-        write_approved_mapping(change_id, mapping)
-
-
-@activity.defn
 async def activity_cv_extract(
     change_id: str, step_id: str, evidence_id: str, scenario: str
 ) -> tuple[dict, dict]:
     handlers = _cv_handlers or CVHandlers(scenario=scenario)
-    port = await handlers.read_port_label(evidence_id, change_id, scenario)
-    tag = await handlers.read_cable_tag(evidence_id, change_id, scenario)
+
+    with _tracer.start_as_current_span("ocr_extraction") as span:
+        port = await handlers.read_port_label(evidence_id, change_id, scenario)
+        tag = await handlers.read_cable_tag(evidence_id, change_id, scenario)
+        raw_text = getattr(port, "raw_text", "") or ""
+        span.set_attribute("ocr.raw_text_length", len(raw_text))
+        span.set_attribute("ocr.port_confidence", port.confidence)
+        span.set_attribute("ocr.tag_confidence", tag.confidence)
+
     return (
         {
             "panel_id": port.panel_id,
@@ -210,9 +268,39 @@ async def activity_cv_extract(
 async def activity_cmdb_validate(
     change_id: str, panel_id: str, port_label: str, cable_tag: str
 ) -> dict:
+    global _netbox_handlers
     if _netbox_handlers is None:
         _netbox_handlers = NetboxHandlers()
-    out = await _netbox_handlers.validate_observed(change_id, panel_id, port_label, cable_tag)
+
+    with _tracer.start_as_current_span("cmdb_validation") as span:
+        out = await _netbox_handlers.validate_observed(change_id, panel_id, port_label, cable_tag)
+        span.set_attribute("cmdb.match", out.match)
+        span.set_attribute("cmdb.reason", out.reason or "")
+        span.set_attribute("cmdb.confidence", out.confidence)
+
+    if not out.match:
+        try:
+            from packages.core.events import CMDBMismatchEvent
+            from packages.core.fixtures.loaders import load_expected_mapping
+
+            mapping = load_expected_mapping(change_id)
+            default = mapping.get("default", mapping)
+            expected_str = (
+                f"{default.get('panel_id', '')}:{default.get('port_label', '')}:"
+                f"{default.get('cable_tag', '')}"
+            )
+            actual_str = f"{panel_id}:{port_label}:{cable_tag}"
+            ev = CMDBMismatchEvent(
+                change_id=change_id,
+                step_id=f"{panel_id}:{port_label}",
+                expected=expected_str,
+                actual=actual_str,
+                correlation_id=change_id,
+            )
+            await _kafka_publish("infrasentinel.cmdb.mismatch", ev.model_dump(mode="json"))
+        except Exception:
+            pass
+
     return {"match": out.match, "reason": out.reason, "confidence": out.confidence}
 
 
@@ -224,6 +312,7 @@ async def activity_request_approval(
     evidence_ids: list[str],
     escalation_text: str | None = None,
 ) -> dict:
+    global _ticketing_handlers
     if _ticketing_handlers is None:
         _ticketing_handlers = TicketingHandlers()
     return await _ticketing_handlers.request_approval(
@@ -240,19 +329,46 @@ async def activity_persist_step_and_proofpack(
     change_id: str, step_result: dict, evidence_id: str | None
 ) -> None:
     result = StepResult.model_validate(step_result)
-    append_step_result_log(result)
-    proofpack = load_proofpack(change_id) or ProofPack(change_id=change_id)
-    ev_ref = None
-    if evidence_id:
-        reg = read_evidence_registry(evidence_id)
-        if reg:
-            ev_ref = EvidenceRef(
-                evidence_id=evidence_id,
-                path=reg.get("object_key", f"evidence/{evidence_id}"),
-                uri=reg.get("uri"),
-                sha256=reg.get("sha256"),
-            )
-        else:
-            ev_ref = EvidenceRef(evidence_id=evidence_id, path=f"evidence/{evidence_id}")
-    updated = update_proofpack(proofpack, change_id, result, ev_ref)
-    save_proofpack(updated)
+
+    with _tracer.start_as_current_span("proofpack_persist") as span:
+        append_step_result_log(result)
+        proofpack = load_proofpack(change_id) or ProofPack(change_id=change_id)
+        ev_ref = None
+        if evidence_id:
+            reg = read_evidence_registry(evidence_id)
+            if reg:
+                ev_ref = EvidenceRef(
+                    evidence_id=evidence_id,
+                    path=reg.get("object_key", f"evidence/{evidence_id}"),
+                    uri=reg.get("uri"),
+                    sha256=reg.get("sha256"),
+                )
+            else:
+                ev_ref = EvidenceRef(evidence_id=evidence_id, path=f"evidence/{evidence_id}")
+        updated = update_proofpack(proofpack, change_id, result, ev_ref)
+        save_proofpack(updated)
+        step_count = len(updated.steps) if updated.steps else 0
+        span.set_attribute("proofpack.step_count", step_count)
+        span.set_attribute("proofpack.change_id", change_id)
+
+    try:
+        from packages.core.events import StepCompletedEvent, ProofPackReadyEvent
+
+        ocr_text = result.observed_port_label or result.observed_cable_tag or ""
+        step_ev = StepCompletedEvent(
+            change_id=change_id,
+            step_id=result.step_id,
+            status=result.status.value if hasattr(result.status, "value") else str(result.status),
+            ocr_text=ocr_text,
+            correlation_id=change_id,
+        )
+        await _kafka_publish("infrasentinel.step.completed", step_ev.model_dump(mode="json"))
+
+        pp_ev = ProofPackReadyEvent(
+            change_id=change_id,
+            proof_pack_url=f"runtime/proofpacks/{change_id}.json",
+            correlation_id=change_id,
+        )
+        await _kafka_publish("infrasentinel.proofpack.ready", pp_ev.model_dump(mode="json"))
+    except Exception:
+        pass

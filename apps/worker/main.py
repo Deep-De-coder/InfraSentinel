@@ -29,6 +29,7 @@ from apps.worker.workflows.change_execution_workflow import ChangeExecutionWorkf
 from apps.worker.workflows.change_workflow import ChangeWorkflow
 from packages.core.config import get_settings
 from packages.core.db import build_engine, init_db, session_factory
+from packages.core.kafka import KafkaEventBus, set_kafka_bus
 from packages.core.observability import configure_observability
 from services.mcp_cv.handlers import CVHandlers
 from services.mcp_netbox.handlers import NetboxHandlers
@@ -39,6 +40,10 @@ async def run_worker() -> None:
     settings = get_settings()
     settings.local_evidence_dir.mkdir(parents=True, exist_ok=True)
     configure_observability(settings)
+
+    kafka_bus = KafkaEventBus(settings.kafka_bootstrap_servers)
+    await kafka_bus.connect()
+    set_kafka_bus(kafka_bus)
 
     engine = build_engine(settings.database_url)
     await init_db(engine)
@@ -70,7 +75,10 @@ async def run_worker() -> None:
             activity_persist_step_and_proofpack,
         ],
     )
-    await worker.run()
+    try:
+        await worker.run()
+    finally:
+        await kafka_bus.disconnect()
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # InfraSentinel
 
+![CI](https://github.com/{owner}/{repo}/actions/workflows/ci.yml/badge.svg)
+
 InfraSentinel is a production-oriented, pilot-stage data-center change-safety agent. It guides technicians through Method of Procedure (MOP) steps, captures evidence (photos), validates rack/port/cable correctness against a CMDB (e.g., NetBox), blocks on mismatch or low confidence, and produces auditable proof packs. The core value: **prevent wrong cable/port changes during MOP execution** using evidence capture + CMDB validation.
 
 ---
